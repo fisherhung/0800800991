@@ -11,12 +11,12 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4leaflet/1.0.1/proj4leaflet.min.js"></script>
     <style>
-        /* 修復地圖顯示：確保 html, body 與 map 容器皆有 100% 高度 */
-        html, body { height: 100%; margin: 0; padding: 0; }
+        /* 極致修復地圖顯示：使用 flex 佈局確保容器 100% 撐開 */
+        html, body { height: 100vh; width: 100vw; margin: 0; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
         #map { 
-            position: absolute;
-            top: 0; bottom: 0; left: 0; right: 0;
-            background: #f1f5f9; 
+            width: 100%;
+            height: 100%;
+            background: #e5e7eb; /* 淺灰色背景，方便確認容器有出現 */
         }
         .sidebar { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); width: 380px; flex-shrink: 0; }
         .sidebar.collapsed { margin-left: -380px; }
@@ -50,14 +50,20 @@
             border-radius: 16px; font-weight: 900; font-size: 1.2rem; display: none; 
             box-shadow: 0 10px 25px rgba(0,0,0,0.2);
         }
+
+        /* 讀取動畫 */
+        .map-loader {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-weight: 900; color: #6366f1; z-index: 500;
+        }
     </style>
 </head>
-<body class="bg-slate-50 font-sans overflow-hidden text-slate-900">
+<body class="bg-slate-50 font-sans text-slate-900">
 
     <div id="toast" class="toast-msg">⚠️ 請先輸入您的姓名再進行標記</div>
 
     <!-- 頂部列 -->
-    <header class="bg-slate-900 text-white h-20 flex justify-between items-center px-6 shadow-xl relative z-[2000]">
+    <header class="bg-slate-900 text-white h-20 flex flex-none justify-between items-center px-6 shadow-xl relative z-[2000]">
         <div class="flex items-center gap-4">
             <button id="toggle-sidebar" class="p-3 hover:bg-slate-800 rounded-xl transition-colors">
                 <svg class="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
@@ -73,7 +79,7 @@
         </div>
     </header>
 
-    <div class="flex h-[calc(100vh-80px)] overflow-hidden relative">
+    <div class="flex flex-1 overflow-hidden relative">
         <!-- 側邊欄 -->
         <aside id="sidebar" class="sidebar bg-white border-r border-slate-200 flex flex-col shadow-2xl z-[1500]">
             <!-- 總進度區 -->
@@ -114,7 +120,8 @@
         </aside>
 
         <!-- 主地圖區 -->
-        <main class="flex-1 relative bg-slate-200">
+        <main class="flex-1 relative bg-slate-100 overflow-hidden">
+            <div id="map-loader" class="map-loader italic animate-pulse">🛰️ 地圖引擎初始化中...</div>
             <div id="map"></div>
 
             <!-- 認領控制面板 -->
@@ -158,6 +165,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // Firebase 初始化
         const firebaseConfig = JSON.parse(__firebase_config);
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -166,27 +174,39 @@
 
         proj4.defs("EPSG:3826", "+proj=tmerc +lat_0=0 +lon_0=121 +k=0.9999 +x_0=250000 +y_0=0 +ellps=GRS80 +units=m +no_defs");
 
-        // --- 地圖初始化修復：延後至 DOMContentLoaded ---
         let map;
-        window.addEventListener('DOMContentLoaded', () => {
-            initMap();
-        });
-
         function initMap() {
-            map = L.map('map', { 
+            console.log("正在初始化地圖...");
+            const mapContainer = document.getElementById('map');
+            
+            // 初始化 Leaflet
+            map = L.map(mapContainer, { 
                 zoomControl: false, 
                 attributionControl: false,
-                fadeAnimation: true
-            }).setView([23.975, 121.604], 15);
+                fadeAnimation: true,
+                zoomAnimation: true
+            }).setView([23.975, 121.604], 13);
 
+            // 使用 HTTPS 版本的國土測繪中心底圖 (避免 Mixed Content 錯誤)
             L.tileLayer('https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}', { 
-                maxZoom: 19 
+                maxZoom: 19,
+                timeout: 5000
             }).addTo(map);
 
-            // 修正初始大小
-            setTimeout(() => map.invalidateSize(), 500);
+            // 地圖載入完成後移除提示
+            map.whenReady(() => {
+                console.log("地圖已就緒");
+                document.getElementById('map-loader').style.display = 'none';
+                setTimeout(() => map.invalidateSize(), 500);
+            });
         }
 
+        // 確保視窗載入後再啟動
+        window.onload = () => {
+            initMap();
+        };
+
+        // --- 全域狀態 ---
         let assets = []; 
         let gridStatus = {}; 
         let pendingJson = null;
@@ -196,11 +216,13 @@
         const userNameInput = document.getElementById('user-name-input');
         const toast = document.getElementById('toast');
 
+        // 側邊欄切換
         document.getElementById('toggle-sidebar').onclick = () => {
             document.getElementById('sidebar').classList.toggle('collapsed');
-            setTimeout(() => map.invalidateSize(), 300);
+            setTimeout(() => map.invalidateSize(), 400); // 側邊欄收合後重新計算地圖大小
         };
 
+        // 檔案處理邏輯保持不變
         document.getElementById('file-input').onchange = async (e) => {
             const file = e.target.files[0];
             if(!file) return;
@@ -344,6 +366,7 @@
             document.getElementById('progress-bar').style.width = progress + '%';
         }
 
+        // Firebase 監聽
         onAuthStateChanged(auth, async (user) => {
             if (user) { 
                 onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'status'), (snap) => {
