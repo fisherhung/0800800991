@@ -13,8 +13,16 @@ from qgis.core import (
 )
 
 # --- 設定匯出資料夾 ---
+# --- 設定匯出資料夾 ---
+# --- 設定匯出資料夾 ---
+# --- 設定匯出資料夾 ---
+# --- 設定匯出資料夾 ---
 output_folder = os.path.expanduser("~/Desktop/花蓮/腳本/")
-
+# --- 設定匯出資料夾 ---
+# --- 設定匯出資料夾 ---
+# --- 設定匯出資料夾 ---
+# --- 設定匯出資料夾 ---
+# --- 設定匯出資料夾 ---
 def sanitize_filename(name):
     return re.sub(r'[\\/*?:"<>|]', "_", name)
 
