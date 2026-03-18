@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>花蓮人行道圖資協作系統</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/togeojson/0.16.0/togeojson.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+:root{
+  --bg:#0a0f1e;--surface:#111827;--surface2:#1f2937;--border:rgba(255,255,255,0.07);
+  --text:#f1f5f9;--text-muted:#64748b;--text-sub:#94a3b8;
+  --card-bg:rgba(255,255,255,0.02);--card-hover:rgba(255,255,255,0.05);
+  --input-bg:rgba(255,255,255,0.04);--header-bg:rgba(10,15,30,0.97);
+  --sidebar-bg:rgba(17,24,39,0.98);--accent:#6366f1;--accent2:#8b5cf6;
+  --accent-dim:rgba(99,102,241,0.12);--accent-border:rgba(99,102,241,0.25);
+  --green:#10b981;--amber:#f59e0b;--sidebar-w:400px;--header-h:76px;
+  --transition:background 0.3s,color 0.3s,border-color 0.3s;
+}
+[data-theme="light"]{
+  --bg:#f1f5f9;--surface:#ffffff;--surface2:#f8fafc;--border:rgba(0,0,0,0.08);
+  --text:#0f172a;--text-muted:#94a3b8;--text-sub:#64748b;
+  --card-bg:rgba(255,255,255,0.8);--card-hover:rgba(99,102,241,0.04);
+  --input-bg:rgba(0,0,0,0.03);--header-bg:rgba(255,255,255,0.97);
+  --sidebar-bg:rgba(255,255,255,0.98);
+  --accent-dim:rgba(99,102,241,0.08);--accent-border:rgba(99,102,241,0.2);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter','Noto Sans TC',sans-serif;background:var(--bg);color:var(--text);overflow:hidden;height:100vh;display:flex;flex-direction:column;transition:var(--transition);}
+::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-thumb{background:rgba(128,128,128,0.2);border-radius:99px;}
+#loading{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.spinner{width:44px;height:44px;border:3px solid rgba(99,102,241,0.15);border-top-color:#6366f1;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:18px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes live-pulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,0.7);}60%{box-shadow:0 0 0 6px rgba(16,185,129,0);}100%{box-shadow:0 0 0 0 rgba(16,185,129,0);}}
+@keyframes memo-badge-pop{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes memo-row-in{0%{opacity:0;transform:translateY(4px)}100%{opacity:1;transform:translateY(0)}}
+@keyframes card-flash{0%,100%{background:var(--accent-dim);border-color:var(--accent-border);}50%{background:rgba(99,102,241,0.32);border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,0.18);}}
+#db-dot.live{animation:live-pulse 1.6s ease-out infinite;}
+header{height:var(--header-h);background:var(--header-bg);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;z-index:2000;flex-shrink:0;transition:var(--transition);}
+.sidebar{width:var(--sidebar-w);flex-shrink:0;background:var(--sidebar-bg);backdrop-filter:blur(20px);border-right:1px solid var(--border);display:flex;flex-direction:column;height:100%;transition:margin .4s cubic-bezier(.16,1,.3,1),var(--transition);}
+.sidebar.collapsed{margin-left:calc(-1 * var(--sidebar-w));}
+.tt{background:var(--surface)!important;color:var(--text)!important;border:1px solid var(--border)!important;border-radius:8px;padding:5px 12px;font-weight:700;font-size:12px;box-shadow:0 4px 20px rgba(0,0,0,0.2);}
+.chip{cursor:pointer;white-space:nowrap;font-weight:600;font-size:12px;padding:4px 12px;border-radius:99px;border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);transition:all .2s;}
+.chip:hover{border-color:var(--accent-border);color:var(--accent);}
+.chip.active{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent);}
+.op-chip{cursor:pointer;white-space:nowrap;font-weight:600;font-size:12px;padding:3px 10px;border-radius:99px;border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);transition:all .2s;}
+.op-chip:hover{border-color:var(--accent-border);color:var(--accent);}
+.op-chip.active{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent);}
+.period-chip{cursor:pointer;white-space:nowrap;font-weight:700;font-size:12px;padding:4px 13px;border-radius:99px;border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);transition:all .2s;}
+.period-chip:hover{border-color:var(--accent-border);color:var(--accent);}
+.period-chip.active{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent);}
+.tab{cursor:pointer;padding:10px 0;font-weight:700;font-size:13px;border-bottom:2px solid transparent;transition:all .2s;color:var(--text-muted);text-align:center;flex:1;}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.btn-accent{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;cursor:pointer;font-weight:700;transition:all .2s;border-radius:12px;}
+.btn-accent:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 8px 25px rgba(99,102,241,0.3);}
+.btn-green{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.25);color:#10b981;border-radius:12px;cursor:pointer;font-weight:700;transition:all .2s;}
+.btn-green:hover{background:rgba(16,185,129,0.2);}
+.btn-ghost{background:var(--input-bg);border:1px solid var(--border);color:var(--text-muted);border-radius:10px;cursor:pointer;font-weight:600;transition:all .2s;}
+.btn-ghost:hover{background:var(--card-hover);color:var(--text);}
+.btn-locked{background:var(--input-bg)!important;border:1px solid var(--border)!important;color:var(--text-muted)!important;opacity:.4!important;cursor:not-allowed!important;transform:none!important;box-shadow:none!important;}
+.asset-card{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:10px;border:1px solid var(--border);background:var(--card-bg);transition:all .15s;}
+.asset-card:hover{background:var(--card-hover);border-color:var(--accent-border);}
+.asset-card.active{background:var(--accent-dim);border-color:var(--accent-border);}
+.asset-card.flash{animation:card-flash .38s ease-in-out 4;}
+.group-hdr{display:flex;align-items:center;justify-content:space-between;padding:6px 11px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;user-select:none;transition:all .15s;margin-top:4px;}
+.group-hdr:hover{border-color:var(--accent-border);}
+.group-hdr.level-period{background:var(--surface);border-left:2px solid var(--accent);padding-left:9px;}
+.group-hdr.level-month{background:var(--card-bg);border-left:2px solid rgba(99,102,241,0.3);padding-left:9px;margin-left:8px;}
+.group-hdr.level-day{background:transparent;border:1px dashed var(--border);padding-left:9px;margin-left:18px;}
+#tools-wrap{overflow:hidden;transition:max-height .35s cubic-bezier(.16,1,.3,1),opacity .2s;}
+#tools-wrap.closed{max-height:0!important;opacity:0;pointer-events:none;}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);z-index:4000;display:flex;align-items:center;justify-content:center;padding:24px;}
+.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:28px;max-width:440px;width:100%;box-shadow:0 25px 80px rgba(0,0,0,0.3);transition:var(--transition);}
+#action-panel{position:absolute;bottom:24px;left:24px;width:340px;background:var(--surface);backdrop-filter:blur(20px);border:1px solid var(--border);border-radius:22px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,0.3);z-index:2000;transition:var(--transition);}
+.prog-track{height:4px;background:var(--border);border-radius:99px;overflow:hidden;}
+.prog-fill{height:100%;border-radius:99px;transition:width .7s cubic-bezier(.16,1,.3,1);}
+.theme-btn{width:52px;height:28px;border-radius:99px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;position:relative;transition:all .3s;flex-shrink:0;}
+.theme-btn-knob{width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));position:absolute;top:3px;left:3px;transition:transform .3s cubic-bezier(.16,1,.3,1);display:flex;align-items:center;justify-content:center;}
+[data-theme="light"] .theme-btn-knob{transform:translateX(24px);}
+input[type=text],input[type=number],textarea,select{background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:10px;outline:none;font-family:inherit;transition:border-color .2s,var(--transition);}
+input[type=text]:focus,input[type=number]:focus,textarea:focus,select:focus{border-color:var(--accent-border);}
+input[type=text]::placeholder,textarea::placeholder{color:var(--text-muted);}
+select option{background:var(--surface);color:var(--text);}
+#toast{position:fixed;bottom:24px;right:24px;z-index:9000;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:12px;padding:11px 18px;font-size:13px;font-weight:600;color:var(--text);box-shadow:0 8px 30px rgba(0,0,0,0.2);transform:translateY(80px);opacity:0;transition:all .3s cubic-bezier(.16,1,.3,1);}
+#toast.show{transform:translateY(0);opacity:1;}
+#map{height:100%;width:100%;}
+#locate-input{background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:9px;outline:none;font-family:inherit;font-size:13px;font-weight:600;padding:6px 12px;width:210px;transition:border-color .2s,var(--transition);}
+#locate-input:focus{border-color:var(--accent-border);}
+#locate-input::placeholder{color:var(--text-muted);font-weight:500;}
+#locate-btn{height:32px;padding:0 14px;font-size:12px;font-weight:700;border:none;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;cursor:pointer;white-space:nowrap;}
+.hl{background:rgba(99,102,241,0.35);border-radius:3px;color:var(--text);}
+.donut-wrap{position:relative;display:flex;align-items:center;justify-content:center;}
+.donut-center{position:absolute;text-align:center;pointer-events:none;}
+#memo-panel{position:fixed;top:0;right:0;bottom:0;width:380px;background:var(--sidebar-bg);border-left:1px solid var(--border);z-index:3500;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .4s cubic-bezier(.16,1,.3,1);}
+#memo-panel.open{transform:translateX(0);}
+.memo-card{padding:12px 14px;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;transition:all .15s;}
+.memo-card:hover{background:var(--card-hover);}
+.memo-card.pinned{border-left:3px solid var(--amber);}
+.period-inline-btn{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:800;cursor:pointer;border:1px solid rgba(99,102,241,0.4);background:rgba(99,102,241,0.12);color:#a5b4fc;transition:all .15s;user-select:none;position:relative;}
+.period-inline-btn:hover{background:rgba(99,102,241,0.25);border-color:var(--accent);}
+.period-inline-btn.auto{background:rgba(100,116,139,0.12);border-color:rgba(100,116,139,0.3);color:var(--text-muted);}
+.period-inline-btn.auto:hover{background:rgba(99,102,241,0.12);border-color:rgba(99,102,241,0.4);color:#a5b4fc;}
+.period-popover{position:absolute;bottom:calc(100% + 6px);left:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:5px;display:flex;gap:4px;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,0.3);}
+.period-popover button{padding:4px 10px;border-radius:7px;border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;transition:all .15s;}
+.period-popover button:hover,.period-popover button.active{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent);}
+.mmdd-input{width:54px;padding:3px 7px;font-size:12px;font-weight:700;text-align:center;border-radius:7px;}
+#batch-progress-wrap{display:none;margin:0 12px 8px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;}
+#batch-progress-wrap.show{display:block;}
+.batch-prog-track{height:6px;background:var(--border);border-radius:99px;overflow:hidden;margin-top:6px;}
+.batch-prog-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#6366f1,#10b981);transition:width .3s;}
+#panel-memo-section{margin-top:14px;border-top:1px solid var(--border);padding-top:12px;}
+#panel-memo-section .pm-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+#panel-memo-section .pm-title{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:var(--text-muted);letter-spacing:.1em;}
+#panel-memo-section .pm-add-btn{display:flex;align-items:center;gap:4px;padding:3px 9px;border-radius:7px;border:1px solid var(--accent-border);background:var(--accent-dim);color:var(--accent);cursor:pointer;font-size:11px;font-weight:700;transition:all .15s;}
+#panel-memo-section .pm-add-btn:hover{background:rgba(99,102,241,0.2);}
+.pm-memo-row{display:flex;align-items:flex-start;gap:7px;padding:7px 9px;border-radius:9px;background:var(--card-bg);border:1px solid var(--border);cursor:pointer;transition:all .15s;animation:memo-row-in .2s ease;}
+.pm-memo-row:hover{background:var(--card-hover);border-color:var(--accent-border);}
+.pm-memo-row.resolved{opacity:0.5;}
+.pm-memo-row .pm-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+.pm-memo-row .pm-content{flex:1;min-width:0;}
+.pm-memo-row .pm-text{font-size:12px;font-weight:600;color:var(--text);line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pm-memo-row .pm-meta{display:flex;align-items:center;gap:5px;margin-top:2px;}
+.pm-memo-row .pm-op{font-size:10px;font-weight:700;color:var(--accent);}
+.pm-memo-row .pm-time{font-size:10px;color:var(--text-muted);}
+.pm-memo-row .pm-comments{font-size:10px;font-weight:700;color:var(--text-muted);background:var(--surface2);border-radius:99px;padding:1px 6px;flex-shrink:0;}
+#panel-memo-input-wrap{display:none;margin-top:8px;gap:6px;flex-direction:column;}
+#panel-memo-input-wrap.open{display:flex;}
+#panel-memo-input-wrap textarea{padding:8px 10px;font-size:12px;resize:none;border-radius:9px;width:100%;}
+#panel-memo-input-wrap .pm-submit-row{display:flex;gap:6px;}
+/* KML面板 */
+#road-panel{position:absolute;bottom:24px;right:24px;width:310px;background:var(--surface);backdrop-filter:blur(20px);border:1px solid var(--border);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,0.35);z-index:2100;overflow:hidden;transition:var(--transition);}
+#road-panel-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;}
+.road-upload-btn{width:100%;padding:9px;border-radius:10px;border:1px dashed var(--accent-border);background:var(--accent-dim);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .2s;}
+.road-upload-btn:hover{background:rgba(99,102,241,0.2);}
+.kml-layer-card{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--card-bg);border:1px solid var(--border);}
+.kml-color-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;cursor:pointer;border:2px solid rgba(255,255,255,0.2);}
+.kml-layer-name{flex:1;font-size:12px;font-weight:600;color:var(--text);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default;}
+.kml-eye-btn{width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;transition:all .15s;}
+.kml-eye-btn.on{border-color:var(--accent-border);background:var(--accent-dim);}
+.kml-del-btn{width:24px;height:24px;border-radius:6px;border:none;background:none;cursor:pointer;font-size:13px;opacity:0.55;flex-shrink:0;}
+.kml-del-btn:hover{opacity:1;}
+.road-diff-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:rgba(99,102,241,0.06);border:1px solid var(--accent-border);}
+#road-status{padding:7px 10px;border-radius:9px;font-size:11px;font-weight:600;background:rgba(99,102,241,0.08);border:1px solid var(--accent-border);color:var(--text-sub);display:none;}
+#road-status.show{display:block;}
+.kml-spinner{display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;margin-right:5px;vertical-align:middle;}
+.color-popover{position:absolute;z-index:9999;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,0.3);display:none;flex-direction:column;gap:8px;}
+.color-presets{display:flex;gap:6px;flex-wrap:wrap;}
+.color-preset{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .15s;}
+.color-preset:hover{transform:scale(1.25);}
+.color-preset.sel{border-color:#fff;}
+</style>
+</head>
+<body>
+<div id="loading"><div class="spinner"></div><p style="font-size:13px;font-weight:700;color:#6366f1;letter-spacing:.15em;">CONNECTING TO DATABASE</p><p style="font-size:11px;color:var(--text-muted);margin-top:5px;">花蓮人行道圖資協作系統</p></div>
+<div id="toast"></div>
+<header>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <button id="btn-toggle" style="width:38px;height:38px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);flex-shrink:0;"><i data-lucide="panel-left" style="width:16px;height:16px;"></i></button>
+    <div>
+      <div style="font-size:26px;font-weight:900;color:var(--text);letter-spacing:-.04em;line-height:1.1;">花蓮人行道圖資協作系統</div>
+      <div style="font-size:10px;font-weight:600;color:var(--text-muted);letter-spacing:.12em;margin-top:3px;">INFRASTRUCTURE · GIS COLLABORATION PLATFORM</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--input-bg);border:1px solid var(--border);border-radius:12px;">
+      <i data-lucide="crosshair" style="width:13px;height:13px;color:var(--accent);flex-shrink:0;"></i>
+      <input id="locate-input" type="text" placeholder="97座標：305000, 2652000">
+      <button id="locate-btn" onclick="locateCoord()">定位</button>
+    </div>
+    <button class="theme-btn" onclick="toggleTheme()"><div class="theme-btn-knob"><i id="theme-icon" data-lucide="moon" style="width:11px;height:11px;color:#fff;"></i></div></button>
+    <button onclick="openHelp()" style="width:34px;height:34px;border-radius:99px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);"><i data-lucide="help-circle" style="width:16px;height:16px;"></i></button>
+    <button onclick="toggleMemo()" id="memo-btn" style="display:flex;align-items:center;gap:6px;padding:7px 15px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;color:var(--text-muted);font-size:13px;font-weight:600;"><i data-lucide="notebook-pen" style="width:14px;height:14px;"></i> 備忘錄<span id="memo-count" style="display:none;background:#ef4444;color:#fff;border-radius:99px;padding:1px 7px;font-size:10px;font-weight:800;"></span></button>
+    <button onclick="openStats()" style="display:flex;align-items:center;gap:6px;padding:7px 15px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;color:var(--text-muted);font-size:13px;font-weight:600;"><i data-lucide="bar-chart-2" style="width:14px;height:14px;"></i> 全員血條</button>
+    <button onclick="openAudit()" style="display:flex;align-items:center;gap:6px;padding:7px 15px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;color:var(--text-muted);font-size:13px;font-weight:600;"><i data-lucide="history" style="width:14px;height:14px;"></i> 操作紀錄</button>
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 16px;border-radius:12px;border:1px solid var(--border);background:var(--input-bg);">
+      <div><div style="font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:.12em;margin-bottom:2px;">OPERATOR</div>
+      <select id="user-select" style="border:none;outline:none;font-weight:700;font-size:14px;color:var(--text);background:transparent;min-width:110px;cursor:pointer;"><option value="">選擇里素隨...</option></select></div>
+      <div style="width:1px;height:28px;background:var(--border);margin:0 2px;"></div>
+      <button onclick="openOpManager()" style="width:29px;height:29px;border-radius:7px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);"><i data-lucide="settings-2" style="width:15px;height:15px;"></i></button>
+    </div>
+    <div style="display:flex;align-items:center;gap:5px;">
+      <div id="db-dot" style="width:8px;height:8px;border-radius:50%;background:#475569;"></div>
+      <span id="db-label" style="font-size:10px;font-weight:700;color:#475569;letter-spacing:.08em;">CONNECTING</span>
+    </div>
+  </div>
+</header>
+
+<div style="display:flex;flex:1;overflow:hidden;position:relative;">
+  <aside id="sidebar" class="sidebar">
+    <div style="padding:10px 12px 0;flex-shrink:0;">
+      <div style="display:flex;align-items:center;gap:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:10px;padding:7px 12px;margin-bottom:7px;">
+        <i data-lucide="search" style="width:13px;height:13px;color:var(--text-muted);flex-shrink:0;"></i>
+        <input id="search-input" type="text" placeholder="搜尋路段名稱..." oninput="renderList()" style="background:none;border:none;outline:none;font-size:13px;font-weight:500;width:100%;padding:0;">
+      </div>
+      <div style="display:flex;gap:5px;margin-bottom:6px;align-items:center;">
+        <span style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.08em;flex-shrink:0;">期別</span>
+        <div class="period-chip active" data-period="all" onclick="selectPeriod('all')">全部</div>
+        <div class="period-chip" data-period="初" onclick="selectPeriod('初')">初</div>
+        <div class="period-chip" data-period="中" onclick="selectPeriod('中')">中</div>
+        <div class="period-chip" data-period="末" onclick="selectPeriod('末')">末</div>
+        <button onclick="openPeriodConfig()" style="margin-left:auto;display:flex;align-items:center;gap:4px;padding:3px 9px;border-radius:7px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;color:var(--text-muted);font-size:11px;font-weight:700;"><i data-lucide="settings" style="width:11px;height:11px;"></i> 分界</button>
+      </div>
+      <div style="display:flex;gap:5px;margin-bottom:7px;">
+        <div class="chip active" data-filter="all" onclick="setFilter('all')">全部</div>
+        <div class="chip" data-filter="none" onclick="setFilter('none')">未認領</div>
+        <div class="chip" data-filter="claimed" onclick="setFilter('claimed')">進行中</div>
+        <div class="chip" data-filter="done" onclick="setFilter('done')">已完工</div>
+      </div>
+      <div id="op-filter-list" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:7px;"></div>
+      <div style="display:flex;gap:12px;margin-bottom:4px;">
+        <span style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:var(--text-muted);"><span style="width:6px;height:6px;border-radius:50%;background:#ef4444;display:inline-block;"></span>未認領</span>
+        <span style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:var(--text-muted);"><span style="width:6px;height:6px;border-radius:50%;background:#f59e0b;display:inline-block;"></span>進行中</span>
+        <span style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:var(--text-muted);"><span style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block;"></span>已完工</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;padding:0 12px;border-bottom:1px solid var(--border);border-top:1px solid var(--border);flex-shrink:0;">
+      <div class="tab active" data-type="point" onclick="setTypeTab('point')">點位</div>
+      <div class="tab" data-type="img" onclick="setTypeTab('img')">PNG 底圖</div>
+      <button id="sort-btn" onclick="toggleSort()" style="padding:4px 6px;border:none;background:none;cursor:pointer;color:var(--accent);font-size:13px;font-weight:800;flex-shrink:0;line-height:1;">↑</button>
+      <button onclick="toggleTools()" style="padding:6px;border:none;background:none;cursor:pointer;color:var(--text-muted);margin-left:2px;flex-shrink:0;"><i id="fold-icon" data-lucide="chevron-up" style="width:15px;height:15px;transition:transform .3s;"></i></button>
+    </div>
+    <div id="tools-wrap" style="max-height:280px;flex-shrink:0;" class="closed">
+      <div style="padding:10px 12px;display:grid;grid-template-columns:1fr 1fr;gap:7px;">
+        <button onclick="triggerFile('fi-json')" class="btn-accent" style="padding:10px;font-size:11px;border:none;">1. 匯入 JSON</button>
+        <button onclick="triggerFile('fi-png')" class="btn-accent" style="padding:10px;font-size:11px;border:none;">2. 上傳 PNG</button>
+        <button onclick="triggerFile('fi-geojson')" style="grid-column:span 2;padding:10px;font-size:12px;font-weight:700;background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--accent);border-radius:12px;cursor:pointer;">匯入點位圖層 (GeoJSON · 可多選批次)</button>
+        <input type="file" id="fi-json" accept=".json" style="display:none;">
+        <input type="file" id="fi-png" accept="image/png" style="display:none;">
+        <input type="file" id="fi-geojson" accept=".geojson,.json" multiple style="display:none;">
+      </div>
+      <div id="batch-progress-wrap">
+        <div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:11px;font-weight:700;color:var(--text-muted);" id="batch-label">上傳中…</span><span style="font-size:11px;font-weight:800;color:var(--accent);" id="batch-pct">0%</span></div>
+        <div class="batch-prog-track"><div class="batch-prog-fill" id="batch-fill" style="width:0%;"></div></div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:4px;" id="batch-detail"></div>
+      </div>
+      <div style="padding:8px 12px 12px;border-top:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;"><span style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.1em;">GLOBAL PROGRESS</span><span id="stat-percent" style="font-size:17px;font-weight:900;color:var(--accent);">0%</span></div>
+        <div class="prog-track"><div id="progress-bar" class="prog-fill" style="width:0%;background:linear-gradient(90deg,#6366f1,#10b981);"></div></div>
+      </div>
+    </div>
+    <div id="asset-list" style="flex:1;overflow-y:auto;padding:6px 10px;display:flex;flex-direction:column;gap:2px;"></div>
+    <div style="padding:8px 14px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+      <span style="font-size:10px;color:var(--border);font-weight:500;">GIS Collaboration System</span>
+      <span style="font-size:10px;color:var(--border);font-weight:500;">produced by Hung</span>
+    </div>
+  </aside>
+
+  <main style="flex:1;position:relative;">
+    <div id="map"></div>
+    <div id="action-panel" style="display:none;">
+      <div style="margin-bottom:14px;">
+        <div style="font-size:9px;font-weight:700;color:var(--accent);letter-spacing:.12em;margin-bottom:3px;">SELECTED LAYER</div>
+        <h3 id="ui-name" style="font-size:17px;font-weight:900;color:var(--text);margin-bottom:7px;word-break:break-all;line-height:1.2;"></h3>
+        <div id="ui-badge"></div>
+      </div>
+      <div id="lock-notice" style="display:none;margin-bottom:10px;padding:9px 12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:10px;align-items:center;gap:7px;font-size:12px;font-weight:600;color:#f59e0b;"><i data-lucide="lock" style="width:13px;height:13px;flex-shrink:0;"></i><span id="lock-msg"></span></div>
+      <div style="display:flex;flex-direction:column;gap:7px;">
+        <button id="btn-claim" class="btn-accent" style="padding:13px;font-size:14px;font-weight:800;border:none;">認領此區塊</button>
+        <button id="btn-done" class="btn-green" style="padding:13px;font-size:14px;font-weight:800;">標記已完工</button>
+        <div style="display:flex;gap:7px;"><button id="btn-release" class="btn-ghost" style="flex:1;padding:9px;font-size:12px;">釋出</button><button onclick="closePanel()" class="btn-ghost" style="flex:1;padding:9px;font-size:12px;">關閉</button></div>
+      </div>
+      <div id="panel-memo-section">
+        <div class="pm-header">
+          <div class="pm-title"><span>📝</span><span>備忘錄</span><span id="panel-memo-badge" style="display:none;background:#ef4444;color:#fff;border-radius:99px;padding:0 6px;font-size:10px;font-weight:800;"></span></div>
+          <button class="pm-add-btn" onclick="togglePanelMemoInput()"><span style="font-size:14px;line-height:1;">+</span> 新增</button>
+        </div>
+        <div id="panel-memo-input-wrap">
+          <textarea id="panel-memo-ta" rows="2" placeholder="輸入備忘…（Enter 送出）"></textarea>
+          <div class="pm-submit-row">
+            <button class="btn-accent" onclick="submitPanelMemo()" style="flex:1;padding:7px;font-size:12px;font-weight:700;border:none;border-radius:9px;">送出</button>
+            <button class="btn-ghost" onclick="togglePanelMemoInput()" style="flex:1;padding:7px;font-size:12px;border-radius:9px;">取消</button>
+          </div>
+        </div>
+        <div id="panel-memo-list" style="display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- KML 面板 -->
+    <div id="road-panel">
+      <div id="road-panel-header" onclick="toggleRoadPanel()">
+        <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:16px;">🛣️</span><div><div style="font-size:13px;font-weight:800;color:var(--text);">外業對照區</div><div style="font-size:10px;color:var(--text-muted);">檢查哪裡沒做到</div></div></div>
+        <i id="road-chevron" data-lucide="chevron-down" style="width:15px;height:15px;color:var(--text-muted);transition:transform .3s;"></i>
+      </div>
+      <div id="road-panel-body" style="display:none;padding:10px 12px;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto;">
+        <button class="road-upload-btn" onclick="triggerFile('fi-kml')"><i data-lucide="upload" style="width:13px;height:13px;"></i> 上傳外業底圖KML</button>
+        <input type="file" id="fi-kml" accept=".kml,.kmz" style="display:none;">
+        <div id="kml-layer-list" style="display:flex;flex-direction:column;gap:5px;"></div>
+        <div style="height:1px;background:var(--border);margin:2px 0;"></div>
+        <div class="road-diff-row">
+          <div style="flex:1;"><div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:3px;">檢查哪裡沒做到 <span style="font-size:10px;font-weight:500;">閾值 18m</span></div><div id="diff-stat" style="font-size:10px;color:var(--text-muted);">開啟圖層後可預覽</div></div>
+          <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">
+            <button id="btn-preview" class="btn-accent" onclick="previewDiff()" style="padding:6px 12px;font-size:11px;font-weight:700;border:none;border-radius:9px;white-space:nowrap;">⚡ 預覽檢查結果</button>
+            <button id="btn-clear-diff" onclick="clearDiff()" style="display:none;padding:6px 12px;font-size:11px;font-weight:700;border-radius:9px;border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);cursor:pointer;white-space:nowrap;">✕ 清除預覽</button>
+          </div>
+        </div>
+        <div id="road-status"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- 備忘錄面板 -->
+<div id="memo-panel">
+  <div style="padding:18px 18px 12px;border-bottom:1px solid var(--border);flex-shrink:0;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><div style="font-size:17px;font-weight:900;color:var(--text);">備忘錄</div><button onclick="toggleMemo()" class="btn-ghost" style="width:28px;height:28px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:8px;">✕</button></div>
+    <div style="font-size:11px;color:var(--text-muted);">多人共享 · 即時同步</div>
+  </div>
+  <div style="padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0;">
+    <div id="memo-op-hint" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;border-radius:9px;background:var(--surface2);border:1px solid var(--border);"><span style="font-size:13px;">👤</span><span id="memo-op-name" style="font-size:12px;font-weight:700;color:var(--text-muted);">請先在右上角選擇里素隨</span></div>
+    <textarea id="memo-input" rows="3" placeholder="輸入備忘內容..." style="width:100%;padding:10px 12px;font-size:13px;resize:none;border-radius:10px;margin-bottom:8px;"></textarea>
+    <div style="display:flex;gap:7px;align-items:center;"><select id="memo-asset-sel" style="flex:1;padding:7px 10px;font-size:12px;font-weight:600;border-radius:9px;cursor:pointer;"><option value="">關聯圖層（選填）</option></select><button onclick="addMemo()" class="btn-accent" style="padding:7px 16px;font-size:12px;font-weight:700;border:none;flex-shrink:0;">新增</button></div>
+  </div>
+  <div id="memo-list" style="flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px;"></div>
+</div>
+
+<!-- 右鍵選單 -->
+<div id="ctx-menu" style="display:none;position:fixed;z-index:3000;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:6px;box-shadow:0 10px 40px rgba(0,0,0,0.3);min-width:220px;">
+  <div style="font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:.1em;padding:4px 10px 6px;">複製座標</div>
+  <button id="ctx-97" style="width:100%;text-align:left;padding:8px 12px;border:none;background:none;cursor:pointer;border-radius:8px;display:flex;flex-direction:column;gap:2px;" onmouseover="this.style.background='var(--accent-dim)'" onmouseout="this.style.background='none'"><span style="font-size:10px;font-weight:700;color:var(--accent);">EPSG:3826 / 97 座標</span><span id="ctx-97-val" style="color:var(--text-sub);font-size:11px;font-weight:600;"></span></button>
+  <button id="ctx-wgs" style="width:100%;text-align:left;padding:8px 12px;border:none;background:none;cursor:pointer;border-radius:8px;display:flex;flex-direction:column;gap:2px;" onmouseover="this.style.background='var(--accent-dim)'" onmouseout="this.style.background='none'"><span style="font-size:10px;font-weight:700;color:var(--green);">WGS84</span><span id="ctx-wgs-val" style="color:var(--text-sub);font-size:11px;font-weight:600;"></span></button>
+</div>
+
+<!-- Modals（儲存/分界/統計/紀錄/說明/人員） -->
+<div id="modal-save" class="modal-bg" style="display:none;"><div class="modal-box"><h3 id="modal-title" style="font-size:19px;font-weight:900;color:var(--text);margin-bottom:4px;">儲存圖層</h3><p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">建議名稱格式：MMDD…（例：0306北段）</p><input id="modal-name" type="text" style="width:100%;padding:11px 14px;font-size:15px;font-weight:700;text-align:center;margin-bottom:12px;" placeholder="輸入名稱..."><div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.1em;margin-bottom:7px;">期別</div><div style="display:flex;gap:7px;"><button class="period-select-btn" data-p="" onclick="selectModalPeriod('')" style="flex:1;padding:8px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:700;">自動</button><button class="period-select-btn" data-p="初" onclick="selectModalPeriod('初')" style="flex:1;padding:8px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:700;">初</button><button class="period-select-btn" data-p="中" onclick="selectModalPeriod('中')" style="flex:1;padding:8px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:700;">中</button><button class="period-select-btn" data-p="末" onclick="selectModalPeriod('末')" style="flex:1;padding:8px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:700;">末</button></div></div><div id="modal-status" style="display:none;padding:9px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:10px;color:#f59e0b;font-size:12px;font-weight:600;margin-bottom:10px;">上傳中...</div><button id="modal-confirm" onclick="doUpload()" class="btn-accent" style="width:100%;padding:13px;font-size:14px;font-weight:800;border:none;">確認儲存</button><button onclick="closeModal()" style="width:100%;margin-top:8px;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:12px;font-weight:600;">取消</button></div></div>
+<div id="modal-period-config" class="modal-bg" style="display:none;"><div class="modal-box" style="max-width:380px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"><div><h3 style="font-size:18px;font-weight:900;color:var(--text);">初/中/末 分界設定</h3><p style="font-size:11px;color:var(--text-muted);">依 MMDD 日期自動分類</p></div><button onclick="closePeriodConfig()" class="btn-ghost" style="width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:8px;">✕</button></div><div style="display:flex;flex-direction:column;gap:12px;"><div style="padding:12px;background:var(--surface2);border-radius:12px;border:1px solid var(--border);"><div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:8px;">初 的範圍：從月初 到 MMDD ≤</div><input id="cfg-early-end" type="text" maxlength="4" class="mmdd-input" placeholder="0305"><div id="cfg-early-preview" style="font-size:11px;color:var(--accent);margin-top:5px;font-weight:600;"></div></div><div style="padding:12px;background:var(--surface2);border-radius:12px;border:1px solid var(--border);"><div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:8px;">中 的範圍：初結束後 到 MMDD ≤</div><input id="cfg-mid-end" type="text" maxlength="4" class="mmdd-input" placeholder="0320"><div id="cfg-mid-preview" style="font-size:11px;color:var(--accent);margin-top:5px;font-weight:600;"></div></div><div style="padding:12px;background:var(--surface2);border-radius:12px;border:1px solid var(--border);"><div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:4px;">末 的範圍：中結束後 至月底</div><div id="cfg-late-preview" style="font-size:11px;color:var(--accent);margin-top:4px;font-weight:600;"></div></div></div><div style="margin-top:14px;display:flex;gap:8px;"><button onclick="applyPeriodConfig()" class="btn-accent" style="flex:1;padding:11px;font-size:13px;font-weight:800;border:none;">套用並儲存</button><button onclick="closePeriodConfig()" class="btn-ghost" style="flex:1;padding:11px;font-size:13px;">取消</button></div></div></div>
+<div id="modal-stats" class="modal-bg" style="display:none;"><div class="modal-box" style="max-width:620px;max-height:92vh;display:flex;flex-direction:column;padding:0;overflow:hidden;"><div style="padding:20px 24px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:19px;font-weight:900;color:var(--text);">團隊進度</div><div style="font-size:11px;color:var(--text-muted);margin-top:2px;">即時完工狀況</div></div><div style="display:flex;gap:8px;align-items:center;"><button onclick="exportXlsx()" style="display:flex;align-items:center;gap:5px;padding:7px 13px;border-radius:9px;border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.1);color:#10b981;cursor:pointer;font-size:12px;font-weight:700;">📊 匯出 Excel</button><button onclick="closeStats()" class="btn-ghost" style="width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:8px;">✕</button></div></div><div style="padding:0 24px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;"><button class="stats-period-tab active" data-sp="all" onclick="setStatsPeriod('all')" style="padding:10px 16px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;color:var(--accent);border-bottom:2px solid var(--accent);">全部</button><button class="stats-period-tab" data-sp="初" onclick="setStatsPeriod('初')" style="padding:10px 16px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;">初期</button><button class="stats-period-tab" data-sp="中" onclick="setStatsPeriod('中')" style="padding:10px 16px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;">中期</button><button class="stats-period-tab" data-sp="末" onclick="setStatsPeriod('末')" style="padding:10px 16px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;">末期</button></div><div style="padding:16px 24px;border-bottom:1px solid var(--border);flex-shrink:0;"><div style="display:flex;gap:14px;align-items:center;"><div class="donut-wrap" style="flex-shrink:0;"><canvas id="donut-canvas" width="120" height="120"></canvas><div class="donut-center"><div id="donut-pct" style="font-size:22px;font-weight:900;color:var(--accent);line-height:1;">0%</div><div style="font-size:9px;color:var(--text-muted);font-weight:600;letter-spacing:.08em;">完工率</div></div></div><div style="flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;"><div style="padding:12px 14px;border-radius:14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.18);text-align:center;"><div id="s-done" style="font-size:28px;font-weight:900;color:#10b981;line-height:1;">0</div><div style="font-size:10px;font-weight:700;color:#10b981;margin-top:4px;">已完工</div></div><div style="padding:12px 14px;border-radius:14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.18);text-align:center;"><div id="s-claimed" style="font-size:28px;font-weight:900;color:#f59e0b;line-height:1;">0</div><div style="font-size:10px;font-weight:700;color:#f59e0b;margin-top:4px;">進行中</div></div><div style="padding:12px 14px;border-radius:14px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.18);text-align:center;"><div id="s-none" style="font-size:28px;font-weight:900;color:#ef4444;line-height:1;">0</div><div style="font-size:10px;font-weight:700;color:#ef4444;margin-top:4px;">未認領</div></div></div></div><div style="margin-top:14px;"><div style="display:flex;justify-content:space-between;margin-bottom:5px;"><span style="font-size:10px;font-weight:700;color:var(--text-muted);">OVERALL PROGRESS</span><span id="stats-total-label" style="font-size:10px;color:var(--text-muted);">0 個圖層</span></div><div style="height:8px;border-radius:99px;background:var(--border);overflow:hidden;display:flex;"><div id="stats-bar-done" style="height:100%;background:#10b981;transition:width .6s;width:0%;"></div><div id="stats-bar-claimed" style="height:100%;background:#f59e0b;transition:width .6s;width:0%;"></div></div></div></div><div id="stats-op-list" style="flex:1;overflow-y:auto;padding:14px 24px;display:flex;flex-direction:column;gap:10px;"></div><div style="padding:12px 24px;border-top:1px solid var(--border);flex-shrink:0;"><button onclick="closeStats()" class="btn-ghost" style="width:100%;padding:10px;font-size:13px;border-radius:12px;">關閉</button></div></div></div>
+<div id="modal-audit" class="modal-bg" style="display:none;"><div class="modal-box" style="max-width:560px;max-height:86vh;display:flex;flex-direction:column;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-shrink:0;"><div><h3 style="font-size:19px;font-weight:900;color:var(--text);">操作紀錄</h3><p style="font-size:11px;color:var(--text-muted);">所有圖層操作歷史</p></div><button onclick="closeAudit()" class="btn-ghost" style="width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:8px;">✕</button></div><div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;flex-shrink:0;"><div class="chip active" data-afilter="all" onclick="setAuditFilter('all')">全部</div><div class="chip" data-afilter="claimed" onclick="setAuditFilter('claimed')">認領</div><div class="chip" data-afilter="done" onclick="setAuditFilter('done')">完工</div><div class="chip" data-afilter="released" onclick="setAuditFilter('released')">釋出</div><div class="chip" data-afilter="renamed" onclick="setAuditFilter('renamed')">改名</div><div class="chip" data-afilter="created" onclick="setAuditFilter('created')">新增</div><div class="chip" data-afilter="deleted" onclick="setAuditFilter('deleted')">刪除</div></div><div id="audit-list" style="flex:1;overflow-y:auto;"></div><button onclick="closeAudit()" class="btn-ghost" style="width:100%;margin-top:12px;padding:11px;font-size:13px;border-radius:12px;flex-shrink:0;">關閉</button></div></div>
+<div id="modal-help" class="modal-bg" style="display:none;"><div class="modal-box" style="max-width:520px;max-height:88vh;overflow-y:auto;padding:24px 26px;"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;"><div style="font-size:20px;font-weight:900;color:var(--text);">系統使用說明</div><button onclick="closeHelp()" class="btn-ghost" style="width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:8px;">✕</button></div><div style="display:flex;flex-direction:column;gap:8px;"><div style="padding:14px 16px;border-radius:14px;background:var(--accent-dim);border:1px solid var(--accent-border);"><div style="font-size:11px;font-weight:800;color:var(--accent);margin-bottom:6px;">🚀 01 · 基本作業流程</div><div style="font-size:12px;color:var(--text-sub);">① 右上角選擇作業員 ② 點選地圖圖層 ③ 認領 ④ 完工後標記</div></div><div style="padding:14px 16px;border-radius:14px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);"><div style="font-size:11px;font-weight:800;color:#34d399;margin-bottom:6px;">🛣️ 02 · KML 圖層管理</div><div style="font-size:12px;color:var(--text-sub);">上傳後永久保存。點眼睛開啟/關閉地圖顯示。點色點換顏色。雙擊名稱改名。</div></div><div style="padding:14px 16px;border-radius:14px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);"><div style="font-size:11px;font-weight:800;color:#a5b4fc;margin-bottom:6px;">📦 03 · 批次上傳點位圖層</div><div style="font-size:12px;color:var(--text-sub);">一次選擇多個 GeoJSON 批次上傳。</div></div></div><button onclick="closeHelp()" class="btn-ghost" style="width:100%;margin-top:16px;padding:11px;font-size:13px;border-radius:12px;">關閉</button></div></div>
+<div id="modal-op" class="modal-bg" style="display:none;"><div class="modal-box" style="max-height:80vh;display:flex;flex-direction:column;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-shrink:0;"><h3 style="font-size:18px;font-weight:900;color:var(--text);">人員管理</h3><button onclick="closeOpManager()" class="btn-ghost" style="width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:8px;">✕</button></div><div style="display:flex;gap:7px;margin-bottom:10px;flex-shrink:0;"><input id="new-op-name" type="text" style="flex:1;padding:9px 13px;font-size:14px;font-weight:600;" placeholder="新作業員姓名"><button onclick="addOperator()" class="btn-accent" style="padding:9px 16px;font-size:13px;font-weight:700;border:none;">新增</button></div><div id="op-list" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:5px;"></div><button onclick="closeOpManager()" class="btn-ghost" style="width:100%;margin-top:14px;padding:11px;font-size:13px;border-radius:12px;flex-shrink:0;">關閉</button></div></div>
+
+<!-- 顏色選擇 Popover -->
+<div id="color-popover" class="color-popover">
+  <div style="font-size:10px;font-weight:700;color:var(--text-muted);">選擇顏色</div>
+  <div class="color-presets" id="color-presets"></div>
+</div>
+
+<script>
+(function(){if(typeof toGeoJSON==='undefined'&&typeof togeojson!=='undefined')window.toGeoJSON=togeojson;})();
+
+var SUPA_URL='https://uxcewvrsipqoeinbdhtw.supabase.co';
+var SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV4Y2V3dnJzaXBxb2VpbmJkaHR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NTM3OTQsImV4cCI6MjA4ODEyOTc5NH0.leM7osk_YK-ypDpF1cM-G5Kriq3pAUI6-8PS_jcwJXg';
+var EDGE_BASE=SUPA_URL+'/functions/v1';
+proj4.defs('EPSG:3826','+proj=tmerc +lat_0=0 +lon_0=121 +k=0.9999 +x_0=250000 +y_0=0 +ellps=GRS80 +units=m +no_defs');
+
+var sb,map,tileLayer;
+var assets=new Map(),operators=[];
+var activeId=null,curFilter='all',curTab='point',curOp='all';
+var pendingJson=null,pendingImg=null,pendingPoints=null,editId=null;
+var isDark=true,sortOrder='asc';
+var locateMarker=null,_ctxCoord=null;
+var collapsedGroups=new Map();
+var activePeriod='all',pendingManualPeriod='';
+var memoOpen=false,memos=[],editingMemoId=null;
+var memoComments={},expandedComments=new Set();
+var periodCfg={earlyEnd:'0305',midEnd:'0320'};
+var statsPeriod='all',_openPopoverId=null;
+var canvasRenderer=L.canvas({padding:0.5});
+
+// ══ KML 狀態 ══
+// kmlLayers: [{id,name,color,visible,geojson_url,storage_path,_geoJSON}]
+var kmlLayers=[];
+// kmlPolylines: {id: [L.Polyline, ...]} — 地圖上實際的線段，是唯一真相來源
+var kmlPolylines={};
+var roadPanelOpen=false;
+var kmlDiffLayer=null;
+var KML_COLORS=['#94a3b8','#818cf8','#f59e0b','#10b981','#ef4444','#ec4899','#06b6d4','#f97316','#ffffff'];
+
+// ══ KML 核心操作 ══
+
+// 把某個 entry 的線段畫到地圖，存入 kmlPolylines[id]
+function kmlShow(id){
+  var en=_getKml(id);
+  if(!en||!en._geoJSON)return;
+  kmlHide(id); // 先清掉舊的避免重複
+  var lines=[];
+  (en._geoJSON.features||[]).forEach(function(f){
+    var geom=f.geometry;if(!geom)return;
+    var rings=geom.type==='LineString'?[geom.coordinates]:geom.coordinates||[];
+    rings.forEach(function(coords){
+      var lls=coords.map(function(c){return[c[1],c[0]];});
+      if(lls.length>1)lines.push(L.polyline(lls,{color:en.color,weight:2.5,opacity:0.9}).addTo(map));
+    });
+  });
+  kmlPolylines[id]=lines;
+  en.visible=true;
+}
+
+// 把某個 entry 的線段從地圖移除
+function kmlHide(id){
+  var en=_getKml(id);if(en)en.visible=false;
+  var lines=kmlPolylines[id]||[];
+  lines.forEach(function(pl){try{map.removeLayer(pl);}catch(e){}});
+  kmlPolylines[id]=[];
+}
+
+function _getKml(id){return kmlLayers.filter(function(x){return x.id===id;})[0]||null;}
+
+// ══ 載入 KML 圖層清單 ══
+function loadKmlLayers(){
+  // 先清除所有地圖上的 KML 線段
+  Object.keys(kmlPolylines).forEach(function(id){kmlHide(id);});
+  kmlPolylines={};
+  kmlLayers=[];
+  return sb.from('kml_layers').select('*').order('created_at',{ascending:true}).then(function(r){
+    var rows=r.data||[];
+    if(!rows.length){renderKmlList();return;}
+    var done=0;
+    rows.forEach(function(row){
+      var en={id:row.id,name:row.name,color:row.color,visible:false,
+        geojson_url:row.geojson_url,storage_path:row.storage_path,_geoJSON:null};
+      kmlLayers.push(en);
+      fetch(row.geojson_url).then(function(res){return res.json();}).then(function(gj){
+        en._geoJSON=gj;
+        // ★ 預設不顯示，什麼都不做
+      }).catch(function(){}).then(function(){
+        done++;if(done===rows.length)renderKmlList();
+      });
+    });
+  });
+}
+
+// ══ 渲染 KML 列表 ══
+function renderKmlList(){
+  var el=document.getElementById('kml-layer-list');
+  if(!el)return;
+  el.innerHTML='';
+  if(!kmlLayers.length){
+    el.innerHTML='<div style="font-size:11px;color:var(--text-muted);text-align:center;padding:4px 0;">尚無 KML 圖層</div>';
+    return;
+  }
+  kmlLayers.forEach(function(entry){
+    var card=document.createElement('div');card.className='kml-layer-card';
+    // 顏色點
+    var dot=document.createElement('div');dot.className='kml-color-dot';
+    dot.style.background=entry.color;dot.title='點擊換色';
+    (function(eid,d){d.onclick=function(e){e.stopPropagation();openColorPopover(eid,d);};})(entry.id,dot);
+    // 名稱
+    var nameEl=document.createElement('span');nameEl.className='kml-layer-name';
+    nameEl.textContent=entry.name;nameEl.title='雙擊改名';
+    (function(eid,nel){
+      nel.ondblclick=function(){
+        var inp=document.createElement('input');inp.type='text';
+        inp.style.cssText='flex:1;font-size:12px;font-weight:600;padding:2px 6px;border-radius:6px;min-width:0;';
+        inp.value=nel.textContent;nel.replaceWith(inp);inp.focus();inp.select();
+        function commit(){
+          var n=inp.value.trim()||entry.name;
+          sb.from('kml_layers').update({name:n}).eq('id',eid).then(function(){
+            var en=_getKml(eid);if(en)en.name=n;renderKmlList();toast('已改名','success');
+          });
+        }
+        inp.onblur=commit;inp.onkeydown=function(ev){if(ev.key==='Enter')inp.blur();if(ev.key==='Escape'){inp.value=entry.name;inp.blur();}};
+      };
+    })(entry.id,nameEl);
+    // ★ 眼睛按鈕：每次根據 kmlPolylines[id].length 判斷目前是否顯示
+    var isOn=(kmlPolylines[entry.id]&&kmlPolylines[entry.id].length>0);
+    var eyeBtn=document.createElement('button');
+    eyeBtn.className='kml-eye-btn'+(isOn?' on':'');
+    eyeBtn.textContent=isOn?'👁':'🙈';
+    eyeBtn.title=isOn?'點擊隱藏':'點擊顯示';
+    (function(eid,btn){
+      btn.onclick=function(ev){
+        ev.stopPropagation();
+        var currently=(kmlPolylines[eid]&&kmlPolylines[eid].length>0);
+        if(currently){
+          kmlHide(eid);
+          btn.textContent='🙈';btn.title='點擊顯示';btn.classList.remove('on');
+        }else{
+          var en=_getKml(eid);
+          if(!en._geoJSON){
+            // 還沒載完，重新 fetch
+            if(!en.geojson_url)return;
+            btn.textContent='⏳';btn.disabled=true;
+            fetch(en.geojson_url).then(function(r){return r.json();}).then(function(gj){
+              en._geoJSON=gj;kmlShow(eid);
+              btn.textContent='👁';btn.title='點擊隱藏';btn.classList.add('on');btn.disabled=false;
+            }).catch(function(){btn.textContent='🙈';btn.disabled=false;});
+            return;
+          }
+          kmlShow(eid);
+          btn.textContent='👁';btn.title='點擊隱藏';btn.classList.add('on');
+        }
+        sb.from('kml_layers').update({visible:!currently}).eq('id',eid).catch(function(){});
+      };
+    })(entry.id,eyeBtn);
+    // 刪除
+    var delBtn=document.createElement('button');delBtn.className='kml-del-btn';delBtn.textContent='🗑️';delBtn.title='刪除';
+    (function(eid){
+      delBtn.onclick=function(ev){
+        ev.stopPropagation();
+        if(!confirm('確定刪除此 KML 圖層？'))return;
+        kmlHide(eid);delete kmlPolylines[eid];
+        var en=_getKml(eid);
+        if(en&&en.storage_path)sb.storage.from('kml-files').remove([en.storage_path]).catch(function(){});
+        sb.from('kml_layers').delete().eq('id',eid).then(function(){
+          kmlLayers=kmlLayers.filter(function(x){return x.id!==eid;});
+          renderKmlList();toast('已刪除','info');
+        });
+      };
+    })(entry.id);
+    card.append(dot,nameEl,eyeBtn,delBtn);el.appendChild(card);
+  });
+}
+
+// ══ 顏色選擇 ══
+var _colorTargetId=null;
+function openColorPopover(entryId,anchorEl){
+  _colorTargetId=entryId;
+  var pop=document.getElementById('color-popover');
+  var presets=document.getElementById('color-presets');presets.innerHTML='';
+  var en=_getKml(entryId);var cur=en?en.color:'';
+  KML_COLORS.forEach(function(c){
+    var s=document.createElement('div');s.className='color-preset'+(c===cur?' sel':'');
+    s.style.background=c;s.title=c;
+    s.onclick=function(){applyKmlColor(entryId,c);pop.style.display='none';};
+    presets.appendChild(s);
+  });
+  var rect=anchorEl.getBoundingClientRect();
+  pop.style.left=Math.min(rect.left,window.innerWidth-180)+'px';
+  pop.style.top=(rect.bottom+4)+'px';
+  pop.style.display='flex';
+  setTimeout(function(){
+    document.addEventListener('click',function cp(ev){
+      if(!pop.contains(ev.target)){pop.style.display='none';document.removeEventListener('click',cp);}
+    });
+  },0);
+}
+function applyKmlColor(entryId,color){
+  var en=_getKml(entryId);if(!en)return;
+  en.color=color;
+  // 重新畫（如果顯示中）
+  if(kmlPolylines[entryId]&&kmlPolylines[entryId].length>0){kmlHide(entryId);kmlShow(entryId);}
+  sb.from('kml_layers').update({color:color}).eq('id',entryId).catch(function(){});
+  renderKmlList();
+}
+
+// ══ KML 上傳 ══
+function uploadKmlFile(file){
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    var parser=new DOMParser();
+    var kmlDoc=parser.parseFromString(ev.target.result,'application/xml');
+    var tgj=window.toGeoJSON||window.togeojson;
+    if(!tgj){toast('toGeoJSON 函式庫未載入','error');return;}
+    var gj=tgj.kml(kmlDoc);
+    var lines={type:'FeatureCollection',features:(gj.features||[]).filter(function(ft){
+      var t=ft.geometry&&ft.geometry.type;return t==='LineString'||t==='MultiLineString';
+    })};
+    if(!lines.features.length){toast('KML 中找不到線段','warn');return;}
+    toast('上傳中…','info');
+    var fname='kml/'+Date.now()+'_'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+    var blob=new Blob([JSON.stringify(lines)],{type:'application/geo+json'});
+    sb.storage.from('kml-files').upload(fname,blob,{contentType:'application/geo+json',upsert:false}).then(function(r){
+      if(r.error)throw r.error;
+      var url=sb.storage.from('kml-files').getPublicUrl(fname).data.publicUrl;
+      var dname=file.name.replace(/\.(kml|kmz)$/i,'');
+      return sb.from('kml_layers').insert({name:dname,color:'#94a3b8',visible:false,storage_path:fname,geojson_url:url}).select().single();
+    }).then(function(res){
+      if(res.error)throw res.error;
+      var entry={id:res.data.id,name:res.data.name,color:res.data.color,visible:false,
+        geojson_url:res.data.geojson_url,storage_path:res.data.storage_path,_geoJSON:lines};
+      kmlLayers.push(entry);
+      kmlPolylines[entry.id]=[];
+      renderKmlList();
+      toast('KML 已保存：'+entry.name+'（點👁開啟顯示）','success');
+    }).catch(function(err){toast('上傳失敗：'+err.message,'error');});
+  };
+  reader.readAsText(file);
+}
+
+// ══ KML 面板折疊 ══
+function toggleRoadPanel(){
+  roadPanelOpen=!roadPanelOpen;
+  var body=document.getElementById('road-panel-body');
+  var chev=document.getElementById('road-chevron');
+  body.style.display=roadPanelOpen?'flex':'none';
+  chev.style.transform=roadPanelOpen?'':'rotate(-90deg)';
+}
+
+// ══ 消除預覽 ══
+function setRoadStatus(msg,show){if(show===undefined)show=true;var el=document.getElementById('road-status');el.textContent=msg;el.classList.toggle('show',show);}
+function calcTotalLength(gj){var l=0;(gj&&gj.features||[]).forEach(function(f){var geom=f.geometry;if(!geom)return;var coords=geom.type==='LineString'?[geom.coordinates]:geom.coordinates||[];coords.forEach(function(ring){for(var i=1;i<ring.length;i++)l+=Math.hypot(ring[i][0]-ring[i-1][0],ring[i][1]-ring[i-1][1]);});});return l;}
+function previewDiff(){
+  var allFeatures=[];
+  kmlLayers.forEach(function(en){if(kmlPolylines[en.id]&&kmlPolylines[en.id].length>0&&en._geoJSON)allFeatures=allFeatures.concat(en._geoJSON.features||[]);});
+  if(!allFeatures.length){toast('請先點👁開啟至少一個 KML 圖層','warn');return;}
+  var mergedGJ={type:'FeatureCollection',features:allFeatures};
+  var btn=document.getElementById('btn-preview');btn.innerHTML='<span class="kml-spinner"></span>計算中…';btn.disabled=true;
+  setRoadStatus('⏳ 計算中…');
+  fetch(EDGE_BASE+'/diff_lines_by_markers',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPA_KEY},body:JSON.stringify({lines:mergedGJ})})
+    .then(function(res){if(!res.ok)throw new Error('HTTP '+res.status);return res.json();})
+    .then(function(result){var diffGJ=result.geojson||result;if(!diffGJ||!diffGJ.features)throw new Error('格式錯誤');showDiffResult(mergedGJ,diffGJ);toast('後端預覽完成','success');})
+    .catch(function(err){console.warn('fallback:',err.message);frontendDiffFallback(mergedGJ);})
+    .then(function(){btn.innerHTML='⚡ 預覽消除';btn.disabled=false;});
+}
+function showDiffResult(origGJ,diffGJ){
+  if(kmlDiffLayer)map.removeLayer(kmlDiffLayer);
+  kmlDiffLayer=L.geoJSON(diffGJ,{style:{color:'#818cf8',weight:3,opacity:0.95}}).addTo(map);
+  var cnt=diffGJ.features.length;var orig=calcTotalLength(origGJ);var pct=orig>0?Math.round((1-calcTotalLength(diffGJ)/orig)*100):0;
+  document.getElementById('diff-stat').textContent='剩餘 '+cnt+' 段（消除 '+pct+'%）';
+  setRoadStatus('✅ 預覽完成（不儲存）');
+  document.getElementById('btn-clear-diff').style.display='block';
+}
+function frontendDiffFallback(origGJ){
+  toast('Edge Function 未連線，前端模擬','warn');
+  var pts=[];
+  assets.forEach(function(a){if(a.type==='point'&&a._rawFeatures){a._rawFeatures.forEach(function(f){var lat=null,lng=null;if(f.geometry&&f.geometry.coordinates){var cx=parseFloat(f.geometry.coordinates[0]),cy=parseFloat(f.geometry.coordinates[1]);if(looksWGS84(cx,cy)){lng=cx;lat=cy;}else{var w=to84(cx,cy);lng=w[0];lat=w[1];}}if(lat!==null)pts.push([lng,lat]);});}});
+  var THRESH=0.0001617;var resultFeatures=[];
+  (origGJ.features||[]).forEach(function(f){var geom=f.geometry;if(!geom)return;var coords=geom.type==='LineString'?[geom.coordinates]:geom.coordinates;coords.forEach(function(ring){var seg=[];ring.forEach(function(pt){var near=pts.some(function(p){return Math.hypot(pt[0]-p[0],pt[1]-p[1])<THRESH;});if(!near){seg.push(pt);}else{if(seg.length>=2)resultFeatures.push({type:'Feature',geometry:{type:'LineString',coordinates:seg.slice()},properties:{}});seg=[];}});if(seg.length>=2)resultFeatures.push({type:'Feature',geometry:{type:'LineString',coordinates:seg},properties:{}});});});
+  var diffGJ={type:'FeatureCollection',features:resultFeatures};
+  showDiffResult(origGJ,diffGJ);
+  document.getElementById('diff-stat').textContent='剩餘 '+resultFeatures.length+' 段（前端模擬）';
+  setRoadStatus('⚠️ 前端模擬');
+  var btn=document.getElementById('btn-preview');btn.innerHTML='⚡ 預覽消除';btn.disabled=false;
+}
+function clearDiff(){
+  if(kmlDiffLayer){map.removeLayer(kmlDiffLayer);kmlDiffLayer=null;}
+  document.getElementById('diff-stat').textContent='開啟圖層後可預覽';
+  document.getElementById('btn-clear-diff').style.display='none';
+  setRoadStatus('',false);toast('已清除消除預覽','info');
+}
+
+// ══ 工具函式 ══
+function to84(e,n){return proj4('EPSG:3826','WGS84',[e,n]);}
+function to3826(lng,lat){return proj4('WGS84','EPSG:3826',[lng,lat]);}
+function sColor(s){return s==='done'?'#10b981':s==='claimed'?'#f59e0b':'#ef4444';}
+function looksWGS84(x,y){return x>=119&&x<=123&&y>=21&&y<=26;}
+function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function highlight(text,kw){if(!kw)return text;var idx=text.toLowerCase().indexOf(kw.toLowerCase());if(idx<0)return text;return text.slice(0,idx)+'<span class="hl">'+text.slice(idx,idx+kw.length)+'</span>'+text.slice(idx+kw.length);}
+function getMMDD(name){var m=name&&name.match(/^(\d{4})/);return m?m[1]:null;}
+function getMonth(name){var m=name&&name.match(/^(\d{2})/);return m?m[1]:null;}
+function autoPeriod(name){var mmdd=getMMDD(name);if(!mmdd)return null;if(mmdd<=periodCfg.earlyEnd)return '初';if(mmdd<=periodCfg.midEnd)return '中';return '末';}
+function effectivePeriod(asset){return asset.manual_period||autoPeriod(asset.name)||'其他';}
+function monthLabel(mm){return parseInt(mm,10)+'月';}
+function dayLabel(mmdd){return parseInt(mmdd.slice(0,2),10)+'月'+parseInt(mmdd.slice(2),10)+'日';}
+function defaultCollapsed(key,pct){if(pct===100)return true;if(key.indexOf('d:')===0&&curFilter==='all'&&curOp==='all')return true;return false;}
+function isCollapsed(key,defVal){if(collapsedGroups.has(key))return collapsedGroups.get(key);return defVal===undefined?false:defVal;}
+function toggleCollapse(key,defVal){if(defVal===undefined)defVal=false;collapsedGroups.set(key,!isCollapsed(key,defVal));renderList();}
+function selectPeriod(p){activePeriod=p;document.querySelectorAll('.period-chip').forEach(function(c){c.classList.toggle('active',c.dataset.period===p);});collapsedGroups.forEach(function(v,k){if(k.indexOf('d:')===0)collapsedGroups.delete(k);});refreshAll();}
+function loadPeriodCfg(){return sb.from('app_settings').select('value').eq('key','period_config').maybeSingle().then(function(r){if(r.data&&r.data.value)periodCfg=r.data.value;}).catch(function(){});}
+function savePeriodCfg(){return sb.from('app_settings').upsert({key:'period_config',value:periodCfg,updated_at:new Date().toISOString()},{onConflict:'key'});}
+function openPeriodConfig(){document.getElementById('cfg-early-end').value=periodCfg.earlyEnd;document.getElementById('cfg-mid-end').value=periodCfg.midEnd;updateCfgPreview();document.getElementById('modal-period-config').style.display='flex';document.getElementById('cfg-early-end').oninput=updateCfgPreview;document.getElementById('cfg-mid-end').oninput=updateCfgPreview;}
+function closePeriodConfig(){document.getElementById('modal-period-config').style.display='none';}
+function updateCfgPreview(){var e=(document.getElementById('cfg-early-end').value.trim()+'0000').slice(0,4);var m=(document.getElementById('cfg-mid-end').value.trim()+'0000').slice(0,4);function fmt(v){return parseInt(v.slice(0,2),10)+'月'+parseInt(v.slice(2),10)+'日';}document.getElementById('cfg-early-preview').innerText='→ 月初 ～ '+fmt(e);document.getElementById('cfg-mid-preview').innerText='→ '+fmt(e)+' 之後 ～ '+fmt(m);document.getElementById('cfg-late-preview').innerText='→ '+fmt(m)+' 之後 至月底';}
+function applyPeriodConfig(){var e=document.getElementById('cfg-early-end').value.trim();var m=document.getElementById('cfg-mid-end').value.trim();if(!/^\d{4}$/.test(e)||!/^\d{4}$/.test(m)){toast('請輸入4位數字','error');return;}if(e>=m){toast('初的結尾必須早於中的結尾','error');return;}periodCfg={earlyEnd:e,midEnd:m};savePeriodCfg().then(function(){toast('分界已儲存','success');});closePeriodConfig();renderList();}
+function selectModalPeriod(p){pendingManualPeriod=p;document.querySelectorAll('.period-select-btn').forEach(function(btn){var a=btn.dataset.p===p;btn.style.background=a?'var(--accent-dim)':'var(--input-bg)';btn.style.borderColor=a?'var(--accent)':'var(--border)';btn.style.color=a?'var(--accent)':'var(--text-muted)';});}
+function closeAllPopovers(){document.querySelectorAll('.period-popover').forEach(function(p){p.remove();});_openPopoverId=null;}
+function togglePeriodPopover(e,assetId){e.stopPropagation();if(_openPopoverId===assetId){closeAllPopovers();return;}closeAllPopovers();_openPopoverId=assetId;var btn=e.currentTarget;var asset=assets.get(assetId);var cur=asset&&asset.manual_period||'';var popover=document.createElement('div');popover.className='period-popover';[{label:'自動',val:''},{label:'初',val:'初'},{label:'中',val:'中'},{label:'末',val:'末'}].forEach(function(opt){var b=document.createElement('button');b.textContent=opt.label;if(cur===opt.val)b.classList.add('active');b.onclick=function(ev){ev.stopPropagation();setAssetPeriod(assetId,opt.val);closeAllPopovers();};popover.appendChild(b);});btn.appendChild(popover);setTimeout(function(){document.addEventListener('click',closeAllPopovers,{once:true});},0);}
+function setAssetPeriod(assetId,period){var asset=assets.get(assetId);if(!asset)return;var uName=document.getElementById('user-select').value;sb.from('assets').update({manual_period:period||null}).eq('id',assetId).then(function(){return writeAudit(assetId,asset.display_name,'renamed',uName,asset.manual_period||'auto',period||'auto');}).then(function(){asset.manual_period=period||'';toast(period?'已設為「'+period+'」期':'已恢復自動分類','success');refreshAll();});}
+
+var NLSC_URL='https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}';
+var NLSC_DARK='https://wmts.nlsc.gov.tw/wmts/EMAP5/default/GoogleMapsCompatible/{z}/{y}/{x}';
+var BLANK='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJgCC==';
+function buildTile(dark){return L.tileLayer(dark?NLSC_DARK:NLSC_URL,{maxZoom:19,tileSize:256,crossOrigin:true,errorTileUrl:BLANK,attribution:'© 國土測繪中心'});}
+function toggleTheme(){isDark=!isDark;document.documentElement.setAttribute('data-theme',isDark?'':'light');document.getElementById('theme-icon').setAttribute('data-lucide',isDark?'moon':'sun');if(tileLayer)map.removeLayer(tileLayer);tileLayer=buildTile(isDark).addTo(map);lucide.createIcons();}
+function setOnline(on){var dot=document.getElementById('db-dot'),lbl=document.getElementById('db-label');dot.style.background=on?'#10b981':'#ef4444';dot.classList.toggle('live',on);lbl.innerText=on?'LIVE':'OFFLINE';lbl.style.color=on?'#10b981':'#ef4444';}
+function toast(msg,type){type=type||'info';var el=document.getElementById('toast');var c={info:'#6366f1',success:'#10b981',warn:'#f59e0b',error:'#ef4444'};el.style.borderLeftColor=c[type]||c.info;el.innerText=msg;el.classList.add('show');setTimeout(function(){el.classList.remove('show');},2800);}
+function locateCoord(){var raw=document.getElementById('locate-input').value.trim();if(!raw)return;var parts=raw.split(/[,，\s]+/).map(function(s){return s.trim();}).filter(Boolean);if(parts.length<2){toast('格式錯誤','error');return;}var e=parseFloat(parts[0]),n=parseFloat(parts[1]);if(isNaN(e)||isNaN(n)){toast('數值解析失敗','error');return;}var ll=to84(e,n),lng=ll[0],lat=ll[1];if(lat<20||lat>30||lng<118||lng>126){toast('座標超出範圍','warn');return;}if(locateMarker){map.removeLayer(locateMarker);locateMarker=null;}var icon=L.divIcon({className:'',html:'<div style="width:18px;height:18px;border-radius:50%;background:#6366f1;border:3px solid #fff;"></div>',iconSize:[18,18],iconAnchor:[9,9]});locateMarker=L.marker([lat,lng],{icon:icon}).addTo(map).bindPopup('<b>📍 97 定位</b><br>E '+e.toFixed(2)+', N '+n.toFixed(2),{maxWidth:220}).openPopup();locateMarker.on('click',function(){map.removeLayer(locateMarker);locateMarker=null;});map.flyTo([lat,lng],17,{animate:true,duration:1.2});toast('已定位 E'+Math.round(e)+', N'+Math.round(n),'success');}
+function copyCoord(type){var c=_ctxCoord;if(!c)return;var text=type==='97'?'E '+c.east.toFixed(3)+', N '+c.north.toFixed(3):c.lat.toFixed(6)+', '+c.lng.toFixed(6);var ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;top:0;left:0;opacity:0;';document.body.appendChild(ta);ta.focus();ta.select();var ok=false;try{ok=document.execCommand('copy');}catch(ex){}document.body.removeChild(ta);document.getElementById('ctx-menu').style.display='none';toast(ok?'已複製：'+text:'複製失敗：'+text,ok?'success':'warn');}
+function writeAudit(assetId,assetName,action,opName,oldVal,newVal){return sb.from('audit_log').insert({asset_id:assetId||null,asset_name:assetName,action:action,operator_name:opName||null,old_value:oldVal||null,new_value:newVal||null}).catch(function(){});}
+var auditData=[],auditFilter='all';
+var ACTION_LABEL={claimed:{text:'認領',color:'#f59e0b',icon:'👷'},done:{text:'完工',color:'#10b981',icon:'✅'},released:{text:'釋出',color:'#64748b',icon:'🔓'},renamed:{text:'改名',color:'#6366f1',icon:'✏️'},created:{text:'新增',color:'#8b5cf6',icon:'📁'},deleted:{text:'刪除',color:'#ef4444',icon:'🗑️'}};
+function openAudit(){document.getElementById('modal-audit').style.display='flex';document.getElementById('audit-list').innerHTML='<div style="text-align:center;padding:24px;color:var(--text-muted);">載入中...</div>';sb.from('audit_log').select('*').order('created_at',{ascending:false}).then(function(r){if(r.error){document.getElementById('audit-list').innerHTML='<div style="color:#ef4444;padding:12px;">載入失敗</div>';return;}auditData=r.data||[];renderAudit();});}
+function closeAudit(){document.getElementById('modal-audit').style.display='none';}
+function setAuditFilter(f){auditFilter=f;document.querySelectorAll('.chip[data-afilter]').forEach(function(c){c.classList.toggle('active',c.dataset.afilter===f);});renderAudit();}
+function renderAudit(){var list=document.getElementById('audit-list');var filtered=auditFilter==='all'?auditData:auditData.filter(function(r){return r.action===auditFilter;});if(!filtered.length){list.innerHTML='<div style="text-align:center;padding:32px;color:var(--text-muted);">暫無紀錄</div>';return;}var groups={};filtered.forEach(function(r){var d=new Date(r.created_at);var key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');if(!groups[key])groups[key]={label:d.getFullYear()+' 年 '+(d.getMonth()+1)+' 月',rows:[]};groups[key].rows.push(r);});var frag=document.createDocumentFragment();Object.keys(groups).sort(function(a,b){return b.localeCompare(a);}).forEach(function(key){var g=groups[key];var hdr=document.createElement('div');hdr.style.cssText='font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.12em;padding:10px 4px 6px;border-bottom:1px solid var(--border);margin-bottom:2px;';hdr.innerText=g.label;frag.appendChild(hdr);g.rows.forEach(function(r){var al=ACTION_LABEL[r.action]||{text:r.action,color:'#64748b',icon:'•'};var d=new Date(r.created_at);var ts=String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');var sub=r.action==='renamed'?r.old_value+' → '+r.new_value:r.operator_name||'';var row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);';row.innerHTML='<div style="font-size:15px;flex-shrink:0;width:20px;text-align:center;">'+al.icon+'</div><div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;"><span style="font-size:11px;font-weight:800;color:'+al.color+';">'+al.text+'</span><span style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px;">'+r.asset_name+'</span></div>'+(sub?'<div style="font-size:11px;color:var(--text-muted);margin-top:1px;">'+sub+'</div>':'')+'</div><div style="font-size:10px;font-weight:600;color:var(--text-muted);flex-shrink:0;">'+ts+'</div>';frag.appendChild(row);});});list.innerHTML='';list.appendChild(frag);}
+function calcStatsByPeriod(period){var done=0,claimed=0,none=0;assets.forEach(function(a){var p=effectivePeriod(a);if(period!=='all'&&p!==period)return;var st=a.statusData&&a.statusData.status||'none';if(st==='done')done++;else if(st==='claimed')claimed++;else none++;});return{done:done,claimed:claimed,none:none,total:done+claimed+none};}
+function setStatsPeriod(p){statsPeriod=p;document.querySelectorAll('.stats-period-tab').forEach(function(t){var a=t.dataset.sp===p;t.style.color=a?'var(--accent)':'var(--text-muted)';t.style.borderBottomColor=a?'var(--accent)':'transparent';});refreshStatsPanel();}
+function refreshStatsPanel(){var r=calcStatsByPeriod(statsPeriod);var p=r.total?Math.round(r.done/r.total*100):0;document.getElementById('donut-pct').innerText=p+'%';document.getElementById('s-done').innerText=r.done;document.getElementById('s-claimed').innerText=r.claimed;document.getElementById('s-none').innerText=r.none;document.getElementById('stats-total-label').innerText=r.total+' 個圖層';document.getElementById('stats-bar-done').style.width=(r.total?r.done/r.total*100:0)+'%';document.getElementById('stats-bar-claimed').style.width=(r.total?r.claimed/r.total*100:0)+'%';drawDonut(r.done,r.claimed,r.none);renderStatsOpList();}
+function drawDonut(done,claimed,none){var canvas=document.getElementById('donut-canvas');var ctx=canvas.getContext('2d');var cx=60,cy=60,r=50,lw=13,total=done+claimed+none||1;ctx.clearRect(0,0,120,120);var start=-Math.PI/2;[{val:done,color:'#10b981'},{val:claimed,color:'#f59e0b'},{val:none,color:'#ef4444'}].forEach(function(s){if(!s.val)return;var sw=2*Math.PI*(s.val/total);ctx.beginPath();ctx.arc(cx,cy,r,start,start+sw);ctx.lineWidth=lw;ctx.strokeStyle=s.color;ctx.lineCap='round';ctx.stroke();start+=sw;});if(!done&&!claimed&&!none){ctx.beginPath();ctx.arc(cx,cy,r,-Math.PI/2,Math.PI*1.5);ctx.lineWidth=lw;ctx.strokeStyle='rgba(100,100,100,.15)';ctx.stroke();}}
+function renderStatsOpList(){var el=document.getElementById('stats-op-list');el.innerHTML='';var opD={},opC={},opN={};assets.forEach(function(a){var period=effectivePeriod(a);if(statsPeriod!=='all'&&period!==statsPeriod)return;var st=a.statusData&&a.statusData.status||'none';var op=a.statusData&&a.statusData.operator_name;if(op){if(st==='done')opD[op]=(opD[op]||0)+1;else if(st==='claimed')opC[op]=(opC[op]||0)+1;else opN[op]=(opN[op]||0)+1;}});var seen={};var allOps=[];operators.forEach(function(o){if(!seen[o.name]){seen[o.name]=1;allOps.push(o.name);}});Object.keys(opD).forEach(function(k){if(!seen[k]){seen[k]=1;allOps.push(k);}});Object.keys(opC).forEach(function(k){if(!seen[k]){seen[k]=1;allOps.push(k);}});allOps.sort(function(a,b){return((opD[b]||0)+(opC[b]||0)+(opN[b]||0))-((opD[a]||0)+(opC[a]||0)+(opN[a]||0));});allOps.forEach(function(name){var d=opD[name]||0,c=opC[name]||0,n=opN[name]||0,t=d+c+n;if(!t)return;var pct=Math.round(d/t*100);var card=document.createElement('div');card.style.cssText='padding:14px 16px;background:var(--card-bg);border:1px solid var(--border);border-radius:14px;';card.onmouseenter=function(){card.style.borderColor='var(--accent-border)';};card.onmouseleave=function(){card.style.borderColor='var(--border)';};card.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="display:flex;align-items:center;gap:9px;"><div style="width:32px;height:32px;border-radius:50%;background:var(--accent-dim);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:var(--accent);">'+name.slice(0,1)+'</div><span style="font-weight:800;font-size:14px;color:var(--text);">'+name+'</span></div><div style="text-align:right;"><div style="font-size:20px;font-weight:900;color:'+(pct>=100?'#10b981':'var(--accent)')+';">'+pct+'%</div><div style="font-size:10px;color:var(--text-muted);font-weight:600;">'+t+' 個圖層</div></div></div><div style="height:7px;border-radius:99px;background:var(--border);overflow:hidden;display:flex;margin-bottom:9px;"><div style="width:'+Math.round(d/t*100)+'%;background:#10b981;"></div><div style="width:'+Math.round(c/t*100)+'%;background:#f59e0b;"></div></div><div style="display:flex;gap:14px;"><span style="font-size:11px;font-weight:700;color:#10b981;">✅ 完工 '+d+'</span><span style="font-size:11px;font-weight:700;color:#f59e0b;">⏳ 進行中 '+c+'</span><span style="font-size:11px;color:var(--text-muted);">🔴 待處理 '+n+'</span></div>';el.appendChild(card);});if(!el.children.length)el.innerHTML='<div style="text-align:center;padding:32px;color:var(--text-muted);">此期別暫無作業紀錄</div>';}
+function openStats(){statsPeriod='all';document.getElementById('modal-stats').style.display='flex';document.querySelectorAll('.stats-period-tab').forEach(function(t){var a=t.dataset.sp==='all';t.style.color=a?'var(--accent)':'var(--text-muted)';t.style.borderBottomColor=a?'var(--accent)':'transparent';});refreshStatsPanel();}
+function closeStats(){document.getElementById('modal-stats').style.display='none';}
+function exportXlsx(){var rows=[['圖層名稱','類型','期別','狀態','作業員','最後更新']];var stL={done:'已完工',claimed:'進行中',none:'待處理'},tL={img:'PNG底圖',point:'點位圖層'};var arr=[];assets.forEach(function(a){arr.push(a);});arr.sort(function(a,b){return a.name.localeCompare(b.name,'zh-TW');}).forEach(function(a){var s=a.statusData;rows.push([a.display_name,tL[a.type]||a.type,effectivePeriod(a),stL[s&&s.status||'none'],s&&s.operator_name||'',s&&s.updated_at?new Date(s.updated_at).toLocaleString('zh-TW'):'']);});var ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:40},{wch:10},{wch:5},{wch:10},{wch:12},{wch:20}];var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'進度總覽');XLSX.writeFile(wb,'花蓮人行道進度_'+new Date().toISOString().slice(0,10)+'.xlsx');toast('Excel 已匯出','success');}
+function downloadCSV(assetId){var a=assets.get(assetId);if(!a||a.type!=='point'){toast('找不到圖層','error');return;}var raw=a._rawFeatures;if(!raw||!raw.length){toast('無點位資料','warn');return;}function esc(v){var s=String(v==null?'':v);return(s.indexOf(',')>=0||s.indexOf('\n')>=0)?'"'+s.replace(/"/g,'""')+'"':s;}var rows=['點名,東坐標,北坐標,高程'];raw.forEach(function(f){var p=getStdProps(f.properties||{});rows.push([esc(p.POINT_NAME),esc(p.EAST),esc(p.NORTH),esc(p.ELEV)].join(','));});var blob=new Blob(['\uFEFF'+rows.join('\n')],{type:'text/csv;charset=utf-8;'});var url=URL.createObjectURL(blob);var link=document.createElement('a');link.href=url;link.download=a.display_name+'.csv';document.body.appendChild(link);link.click();document.body.removeChild(link);URL.revokeObjectURL(url);toast('已匯出 '+(rows.length-1)+' 筆','success');}
+function isFieldFmt(props){return props&&Object.keys(props).some(function(k){return /^field_\d+$/.test(k);});}
+function getStdProps(props){if(!props)return{};if(isFieldFmt(props))return{POINT_NAME:String(props['field_1']==null?'':props['field_1']),EAST:props['field_7']||'',NORTH:props['field_6']||'',ELEV:props['field_8']||''};return{POINT_NAME:String(props['點名']||props['name']||props['NAME']||''),EAST:props['東坐標']||props['東座標']||'',NORTH:props['北坐標']||props['北座標']||'',ELEV:props['高程']||''};}
+function syncMemoOpHint(){var name=document.getElementById('user-select').value;var hint=document.getElementById('memo-op-name');if(!hint)return;hint.textContent=name?name:'請先在右上角選擇里素隨';hint.style.color=name?'var(--accent)':'var(--text-muted)';}
+function toggleMemo(){memoOpen=!memoOpen;document.getElementById('memo-panel').classList.toggle('open',memoOpen);if(memoOpen){syncMemoOpHint();loadMemos();}}
+function loadMemos(){return Promise.all([sb.from('memos').select('*').order('pinned',{ascending:false}).order('created_at',{ascending:false}),sb.from('memo_comments').select('*').order('created_at',{ascending:true})]).then(function(results){memos=results[0].data||[];memoComments={};(results[1].data||[]).forEach(function(c){if(!memoComments[c.memo_id])memoComments[c.memo_id]=[];memoComments[c.memo_id].push(c);});renderMemos();updateMemoCount();if(activeId)renderPanelMemos(activeId);var sel=document.getElementById('memo-asset-sel');sel.innerHTML='<option value="">關聯圖層（選填）</option>';var arr=[];assets.forEach(function(a,id){arr.push({id:id,name:a.name});});arr.sort(function(a,b){return a.name.localeCompare(b.name,'zh-TW');}).forEach(function(item){var o=document.createElement('option');o.value=item.id;o.innerText=item.name;sel.appendChild(o);});});}
+function renderPanelMemos(assetId){var list=document.getElementById('panel-memo-list');var badge=document.getElementById('panel-memo-badge');if(!list)return;var linked=memos.filter(function(m){return m.asset_id===assetId;});var unresolved=linked.filter(function(m){return !m.resolved;});if(unresolved.length){badge.style.display='inline';badge.textContent=unresolved.length;}else badge.style.display='none';if(!linked.length){list.innerHTML='<div style="text-align:center;padding:10px 0 4px;font-size:11px;color:var(--text-muted);font-style:italic;">此圖層尚無備忘</div>';return;}list.innerHTML='';var sorted=linked.slice().sort(function(a,b){if(a.resolved===b.resolved)return 0;return a.resolved?1:-1;});sorted.forEach(function(m){var d=new Date(m.created_at);var ts=(d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');var commentCount=(memoComments[m.id]||[]).length;var dotColor=m.resolved?'#10b981':'#f59e0b';var row=document.createElement('div');row.className='pm-memo-row'+(m.resolved?' resolved':'');row.onclick=function(){if(!memoOpen){memoOpen=true;document.getElementById('memo-panel').classList.add('open');syncMemoOpHint();}if(!memos.length)loadMemos();else renderMemos();};row.innerHTML='<div class="pm-dot" style="background:'+dotColor+';margin-top:5px;"></div><div class="pm-content"><div class="pm-text">'+escHtml(m.content)+'</div><div class="pm-meta">'+(m.operator_name?'<span class="pm-op">👤 '+escHtml(m.operator_name)+'</span>':'')+'<span class="pm-time">'+ts+'</span>'+(m.resolved?'<span style="font-size:10px;font-weight:700;color:#10b981;">✓ 已解決</span>':'')+'</div></div>'+(commentCount?'<span class="pm-comments">💬 '+commentCount+'</span>':'');list.appendChild(row);});}
+function togglePanelMemoInput(){var wrap=document.getElementById('panel-memo-input-wrap');var isOpen=wrap.classList.toggle('open');if(isOpen){var ta=document.getElementById('panel-memo-ta');ta.focus();ta.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submitPanelMemo();}};}}
+function submitPanelMemo(){var ta=document.getElementById('panel-memo-ta');var content=ta.value.trim();if(!content){toast('請輸入備忘內容','warn');return;}var opName=document.getElementById('user-select').value;if(!opName){toast('請先選擇作業員','error');return;}if(!activeId){toast('無關聯圖層','error');return;}sb.from('memos').insert({content:content,asset_id:activeId,operator_name:opName,pinned:false,resolved:false}).then(function(){ta.value='';document.getElementById('panel-memo-input-wrap').classList.remove('open');toast('備忘已新增','success');return loadMemos();});}
+function mkMemoBtn(emoji,title,active,activeBorder,activeBg,onClick){var b=document.createElement('button');b.title=title;b.textContent=emoji;b.style.cssText='width:28px;height:28px;border-radius:7px;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;line-height:1;border:'+(active?activeBorder:'1px solid transparent')+';background:'+(active?activeBg:'transparent')+';opacity:'+(active?'1':'0.45')+';transition:all .15s;';b.onmouseenter=function(){b.style.opacity='1';if(!active)b.style.background='var(--card-hover)';};b.onmouseleave=function(){b.style.opacity=active?'1':'0.45';if(!active)b.style.background='transparent';};b.onclick=onClick;return b;}
+function renderMemos(){var list=document.getElementById('memo-list');if(!memos.length){list.innerHTML='<div style="text-align:center;padding:32px;color:var(--text-muted);font-size:13px;">尚無備忘錄</div>';return;}list.innerHTML='';var sorted=memos.slice().sort(function(a,b){if(a.pinned!==b.pinned)return a.pinned?-1:1;if(a.resolved!==b.resolved)return a.resolved?1:-1;return 0;});sorted.forEach(function(m){var comments=memoComments[m.id]||[];var d=new Date(m.created_at);var ts=(d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');var linked=m.asset_id?assets.get(m.asset_id):null;var isExpanded=expandedComments.has(m.id);var card=document.createElement('div');card.className='memo-card'+(m.pinned?' pinned':'');if(m.resolved)card.style.opacity='0.55';if(editingMemoId===m.id){var ta=document.createElement('textarea');ta.rows=3;ta.value=m.content;ta.style.cssText='width:100%;padding:8px 10px;font-size:13px;resize:none;border-radius:9px;margin-bottom:8px;';var row=document.createElement('div');row.style.cssText='display:flex;gap:6px;';var saveBtn=document.createElement('button');saveBtn.className='btn-accent';saveBtn.style.cssText='flex:1;padding:6px;font-size:12px;font-weight:700;border:none;border-radius:9px;';saveBtn.textContent='儲存';(function(mid,taEl){saveBtn.onclick=function(){saveEditMemo(mid,taEl.value);};})(m.id,ta);var cancelBtn=document.createElement('button');cancelBtn.className='btn-ghost';cancelBtn.style.cssText='flex:1;padding:6px;font-size:12px;border-radius:9px;';cancelBtn.textContent='取消';cancelBtn.onclick=function(){editingMemoId=null;renderMemos();};row.append(saveBtn,cancelBtn);card.append(ta,row);}else{var topRow=document.createElement('div');topRow.style.cssText='display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;';var contentDiv=document.createElement('div');contentDiv.style.cssText='font-size:13px;font-weight:600;color:var(--text);line-height:1.5;flex:1;white-space:pre-wrap;word-break:break-all;'+(m.resolved?'text-decoration:line-through;color:var(--text-muted);':'');contentDiv.textContent=m.content;var btnRow=document.createElement('div');btnRow.style.cssText='display:flex;align-items:center;gap:3px;flex-shrink:0;';(function(mid,mresolved,mpinned){btnRow.append(mkMemoBtn(mresolved?'✅':'☑️',mresolved?'取消解決':'標記已解決',mresolved,'1px solid rgba(16,185,129,.4)','rgba(16,185,129,.12)',function(){toggleResolve(mid,!mresolved);}),mkMemoBtn('📌',mpinned?'取消置頂':'置頂',mpinned,'1px solid rgba(245,158,11,.4)','rgba(245,158,11,.1)',function(){togglePin(mid,!mpinned);}),mkMemoBtn('✏️','編輯',false,'','',function(){editingMemoId=mid;renderMemos();}),mkMemoBtn('🗑️','刪除',false,'','',function(){deleteMemo(mid);}));})(m.id,m.resolved,m.pinned);topRow.append(contentDiv,btnRow);card.appendChild(topRow);var metaRow=document.createElement('div');metaRow.style.cssText='display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;';if(m.operator_name){var opBadge=document.createElement('span');opBadge.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;color:var(--accent);background:var(--accent-dim);border:1px solid var(--accent-border);border-radius:99px;padding:2px 9px;';opBadge.textContent='👤 '+m.operator_name;metaRow.appendChild(opBadge);}var timeSpan=document.createElement('span');timeSpan.style.cssText='font-size:10px;color:var(--text-muted);font-weight:600;';timeSpan.textContent=ts;metaRow.appendChild(timeSpan);if(linked){var linkBadge=document.createElement('span');linkBadge.style.cssText='font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);color:#818cf8;cursor:pointer;';linkBadge.textContent='🔗 '+linked.name;(function(aid){linkBadge.onclick=function(){focusOn(aid);};})(m.asset_id);metaRow.appendChild(linkBadge);}if(m.resolved){var rt=document.createElement('span');rt.style.cssText='font-size:10px;font-weight:700;color:#10b981;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);border-radius:99px;padding:1px 8px;';rt.textContent='✓ 已解決';metaRow.appendChild(rt);}card.appendChild(metaRow);var commentSection=document.createElement('div');commentSection.style.cssText='border-top:1px solid var(--border);padding-top:8px;';var toggleBtn=document.createElement('button');toggleBtn.style.cssText='display:flex;align-items:center;gap:5px;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:11px;font-weight:700;padding:0;width:100%;';toggleBtn.innerHTML='<span style="font-size:13px;">💬</span><span>留言</span>'+(comments.length?'<span style="background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--accent);border-radius:99px;padding:0 6px;font-size:10px;font-weight:800;">'+comments.length+'</span>':'')+'<span style="margin-left:auto;">'+(isExpanded?'▲':'▼')+'</span>';(function(mid){toggleBtn.onclick=function(){if(expandedComments.has(mid))expandedComments.delete(mid);else expandedComments.add(mid);renderMemos();};})(m.id);commentSection.appendChild(toggleBtn);if(isExpanded){var commentBody=document.createElement('div');commentBody.style.cssText='display:flex;flex-direction:column;gap:6px;margin-top:8px;';comments.forEach(function(c){var cd=new Date(c.created_at);var cts=(cd.getMonth()+1)+'/'+cd.getDate()+' '+String(cd.getHours()).padStart(2,'0')+':'+String(cd.getMinutes()).padStart(2,'0');var cDiv=document.createElement('div');cDiv.style.cssText='padding:7px 10px;background:var(--surface2);border-radius:9px;border:1px solid var(--border);';var cHeader=document.createElement('div');cHeader.style.cssText='display:flex;align-items:center;gap:6px;margin-bottom:3px;';var opSpan=document.createElement('span');opSpan.style.cssText='font-size:11px;font-weight:800;color:var(--accent);';opSpan.textContent=c.operator_name||'匿名';var tsSpan=document.createElement('span');tsSpan.style.cssText='font-size:10px;color:var(--text-muted);';tsSpan.textContent=cts;var delCBtn=document.createElement('button');delCBtn.style.cssText='margin-left:auto;width:20px;height:20px;border:none;background:none;cursor:pointer;color:var(--text-muted);font-size:12px;opacity:0.6;';delCBtn.textContent='✕';(function(cid){delCBtn.onclick=function(){deleteComment(cid);};})(c.id);cHeader.append(opSpan,tsSpan,delCBtn);var cContent=document.createElement('div');cContent.style.cssText='font-size:12px;color:var(--text);line-height:1.5;word-break:break-all;';cContent.textContent=c.content;cDiv.append(cHeader,cContent);commentBody.appendChild(cDiv);});var inputRow=document.createElement('div');inputRow.style.cssText='display:flex;gap:6px;align-items:flex-end;margin-top:2px;';var cTa=document.createElement('textarea');cTa.rows=2;cTa.placeholder='輸入留言（Enter 送出）...';cTa.style.cssText='flex:1;padding:7px 10px;font-size:12px;resize:none;border-radius:9px;';var cBtn=document.createElement('button');cBtn.className='btn-accent';cBtn.style.cssText='padding:7px 12px;font-size:12px;font-weight:700;border:none;border-radius:9px;flex-shrink:0;';cBtn.textContent='送出';(function(mid,ta){cBtn.onclick=function(){submitComment(mid,ta.value,ta);};ta.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submitComment(mid,ta.value,ta);}});})(m.id,cTa);inputRow.append(cTa,cBtn);commentBody.appendChild(inputRow);commentSection.appendChild(commentBody);}card.appendChild(commentSection);}list.appendChild(card);});}
+function addMemo(){var content=document.getElementById('memo-input').value.trim();if(!content){toast('請輸入備忘內容','warn');return;}var opName=document.getElementById('user-select').value;if(!opName){toast('請先選擇作業員','error');return;}var assetId=document.getElementById('memo-asset-sel').value||null;sb.from('memos').insert({content:content,asset_id:assetId,operator_name:opName,pinned:false,resolved:false}).then(function(){document.getElementById('memo-input').value='';toast('備忘已新增','success');return loadMemos();});}
+function submitComment(memoId,content,taEl){content=(content||'').trim();if(!content){toast('留言不能為空','warn');return;}var opName=document.getElementById('user-select').value;if(!opName){toast('請先選擇作業員','error');return;}sb.from('memo_comments').insert({memo_id:memoId,content:content,operator_name:opName}).then(function(){if(taEl)taEl.value='';expandedComments.add(memoId);toast('留言已送出','success');return loadMemos();});}
+function deleteComment(id){if(!confirm('確定刪除此留言？'))return;sb.from('memo_comments').delete().eq('id',id).then(function(){return loadMemos();});}
+function toggleResolve(id,resolved){sb.from('memos').update({resolved:resolved}).eq('id',id).then(function(){toast(resolved?'已標記解決 ✓':'已取消解決',resolved?'success':'info');return loadMemos();});}
+function saveEditMemo(id,content){content=content.trim();if(!content){toast('內容不能為空','error');return;}sb.from('memos').update({content:content}).eq('id',id).then(function(){editingMemoId=null;toast('備忘已更新','success');return loadMemos();});}
+function togglePin(id,pinned){sb.from('memos').update({pinned:pinned}).eq('id',id).then(function(){return loadMemos();});}
+function deleteMemo(id){if(!confirm('確定刪除？'))return;sb.from('memos').delete().eq('id',id).then(function(){return loadMemos();}).then(function(){toast('已刪除','info');});}
+function updateMemoCount(){var cnt=document.getElementById('memo-count');var unresolved=memos.filter(function(m){return !m.resolved;}).length;if(unresolved>0){cnt.style.display='inline';cnt.textContent=unresolved;}else cnt.style.display='none';}
+
+function init(){
+  map=L.map('map',{zoomControl:false,attributionControl:true}).setView([23.975,121.605],14);
+  tileLayer=buildTile(true).addTo(map);L.control.zoom({position:'topright'}).addTo(map);
+  // 確保 road panel 預設折疊
+  document.getElementById('road-panel-body').style.display='none';
+  document.getElementById('road-chevron').style.transform='rotate(-90deg)';
+  document.getElementById('btn-toggle').onclick=function(){document.getElementById('sidebar').classList.toggle('collapsed');setTimeout(function(){map.invalidateSize();},400);};
+  document.getElementById('locate-input').addEventListener('keydown',function(e){if(e.key==='Enter')locateCoord();});
+  document.getElementById('user-select').addEventListener('change',function(){syncMemoOpHint();});
+  var ctxMenu=document.getElementById('ctx-menu');
+  map.on('contextmenu',function(e){e.originalEvent.preventDefault();var lat=e.latlng.lat,lng=e.latlng.lng;var en=to3826(lng,lat);_ctxCoord={lat:lat,lng:lng,east:en[0],north:en[1]};document.getElementById('ctx-97-val').innerText='E '+en[0].toFixed(3)+', N '+en[1].toFixed(3);document.getElementById('ctx-wgs-val').innerText=lat.toFixed(6)+', '+lng.toFixed(6);var mx=e.originalEvent.clientX,my=e.originalEvent.clientY;ctxMenu.style.left=(mx+230>window.innerWidth?mx-230:mx)+'px';ctxMenu.style.top=(my+120>window.innerHeight?my-120:my)+'px';ctxMenu.style.display='block';});
+  document.getElementById('ctx-97').addEventListener('click',function(){copyCoord('97');});
+  document.getElementById('ctx-wgs').addEventListener('click',function(){copyCoord('wgs');});
+  document.addEventListener('click',function(e){if(!ctxMenu.contains(e.target))ctxMenu.style.display='none';});
+  map.on('click',function(){ctxMenu.style.display='none';});
+  sb=supabase.createClient(SUPA_URL,SUPA_KEY);
+  setOnline(true);document.getElementById('loading').style.display='none';lucide.createIcons();toast('系統連線成功','success');
+  document.getElementById('fi-kml').onchange=function(e){var f=e.target.files[0];e.target.value='';if(!f)return;uploadKmlFile(f);};
+  document.getElementById('fi-json').onchange=function(e){var f=e.target.files[0];if(!f)return;var reader=new FileReader();reader.onload=function(ev){try{pendingJson=JSON.parse(ev.target.result);toast('JSON 已讀取','success');}catch(ex){alert('JSON 解析失敗');}};reader.readAsText(f);e.target.value='';};
+  document.getElementById('fi-png').onchange=function(e){var f=e.target.files[0];if(!f)return;if(!pendingJson)return alert('請先匯入 JSON');var r=new FileReader();r.onload=function(ev){var img=new Image();img.onload=function(){var canvas=document.createElement('canvas');var w=img.width,h=img.height,max=1600;if(w>max||h>max){if(w>h){h=Math.round(max/w*h);w=max;}else{w=Math.round(max/h*w);h=max;}}canvas.width=w;canvas.height=h;canvas.getContext('2d').drawImage(img,0,0,w,h);var q=0.9,res=canvas.toDataURL('image/png');while(res.length>1000000&&q>0.1){res=canvas.toDataURL('image/jpeg',q);q-=0.1;}pendingImg=res;pendingManualPeriod='';selectModalPeriod('');document.getElementById('modal-name').value=pendingJson.name||f.name.split('.')[0];document.getElementById('modal-title').innerText='儲存 PNG 圖層';document.getElementById('modal-save').style.display='flex';};img.src=ev.target.result;};r.readAsDataURL(f);e.target.value='';};
+  document.getElementById('fi-geojson').onchange=function(e){var files=Array.from(e.target.files);e.target.value='';if(!files.length)return;if(files.length===1){var reader=new FileReader();reader.onload=function(ev){try{var json=JSON.parse(ev.target.result);pendingPoints=json.features||(Array.isArray(json)?json:[json]);pendingManualPeriod='';selectModalPeriod('');document.getElementById('modal-name').value=files[0].name.split('.')[0];document.getElementById('modal-title').innerText='儲存點位';document.getElementById('modal-save').style.display='flex';}catch(ex){alert('GeoJSON 解析失敗');}};reader.readAsText(files[0]);return;}var wrap=document.getElementById('batch-progress-wrap');var fillEl=document.getElementById('batch-fill');var labelEl=document.getElementById('batch-label');var pctEl=document.getElementById('batch-pct');var detailEl=document.getElementById('batch-detail');var toolsWrap=document.getElementById('tools-wrap');if(toolsWrap.classList.contains('closed')){toolsWrap.classList.remove('closed');document.getElementById('fold-icon').style.transform='rotate(0deg)';}wrap.classList.add('show');var uName=document.getElementById('user-select').value;var done=0,failed=0,idx=0;function uploadNext(){if(idx>=files.length){fillEl.style.width='100%';pctEl.textContent='100%';labelEl.textContent='完成！成功 '+done+(failed?'，失敗 '+failed:'');detailEl.textContent='';toast('批次完成：'+done+' 成功'+(failed?'，'+failed+' 失敗':''),failed?'warn':'success');setTimeout(function(){wrap.classList.remove('show');},4000);return;}var f=files[idx];var name=f.name.replace(/\.(geojson|json)$/i,'');labelEl.textContent='上傳中 ('+(idx+1)+'/'+files.length+')：'+name;pctEl.textContent=Math.round(idx/files.length*100)+'%';fillEl.style.width=Math.round(idx/files.length*100)+'%';var reader=new FileReader();reader.onload=function(ev){try{var json=JSON.parse(ev.target.result);var features=json.features||(Array.isArray(json)?json:[json]);var geojson={type:'FeatureCollection',features:features};var fname=Date.now()+'_'+idx+'.geojson';var blob=new Blob([JSON.stringify(geojson)],{type:'application/geo+json'});sb.storage.from('asset-points').upload(fname,blob,{contentType:'application/geo+json',upsert:false}).then(function(r){var pointsUrl=null;if(!r.error)pointsUrl=sb.storage.from('asset-points').getPublicUrl(fname).data.publicUrl;return sb.from('assets').insert({display_name:name,type:'point',points_url:pointsUrl||null,points_json:pointsUrl?null:features,manual_period:pendingManualPeriod||null}).select().single();}).then(function(res){if(res.error)throw res.error;return writeAudit(res.data&&res.data.id,name,'created',uName,null,name);}).then(function(){done++;idx++;uploadNext();}).catch(function(err){failed++;detailEl.textContent='❌ '+name+'：'+err.message;idx++;uploadNext();});}catch(ex){failed++;detailEl.textContent='❌ '+name+'：解析失敗';idx++;uploadNext();}};reader.readAsText(f);}uploadNext();};
+  loadPeriodCfg().then(function(){return loadAll();}).then(function(){subscribeRT();return loadKmlLayers();});
+  sb.from('memos').select('*').order('pinned',{ascending:false}).order('created_at',{ascending:false}).then(function(r){memos=r.data||[];updateMemoCount();});
+}
+
+function loadAll(){return Promise.all([sb.from('assets').select('id,display_name,type,bounds_json,img_url,points_url,manual_period,created_at'),sb.from('asset_status').select('*'),sb.from('operators').select('*').order('name')]).then(function(results){var sMap={};(results[1].data||[]).forEach(function(s){sMap[s.asset_id]=s;});operators=results[2].data||[];var rows=results[0].data||[];var i=0;function batchAdd(){var end=Math.min(i+8,rows.length);for(;i<end;i++){addAsset(Object.assign({},rows[i]),sMap[rows[i].id]||null);}if(i<rows.length)requestAnimationFrame(batchAdd);else{renderOpUI();renderOpFilterUI();refreshAll();}}requestAnimationFrame(batchAdd);});}
+
+function subscribeRT(){
+  sb.channel('rt')
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'assets'},function(e){sb.from('asset_status').select('*').eq('asset_id',e.new.id).maybeSingle().then(function(r){addAsset(e.new,r.data||null);refreshAll();toast('新圖層：'+e.new.display_name,'info');});})
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'assets'},function(e){var a=assets.get(e.new.id);if(!a)return;a.name=e.new.display_name;a.display_name=e.new.display_name;a.manual_period=e.new.manual_period||'';if(a.type==='img')a.rect.setTooltipContent(e.new.display_name);refreshAll();})
+    .on('postgres_changes',{event:'DELETE',schema:'public',table:'assets'},function(e){removeLayer(e.old.id);refreshAll();toast('圖層已刪除','warn');})
+    .on('postgres_changes',{event:'*',schema:'public',table:'asset_status'},function(e){var id=e.new&&e.new.asset_id||e.old&&e.old.asset_id;if(assets.has(id))assets.get(id).statusData=e.eventType==='DELETE'?null:e.new;refreshAll();if(e.new&&e.new.status==='claimed')toast(e.new.operator_name+' 認領了路段','info');if(e.new&&e.new.status==='done')toast(e.new.operator_name+' 完成了路段 ✓','success');})
+    .on('postgres_changes',{event:'*',schema:'public',table:'operators'},function(){sb.from('operators').select('*').order('name').then(function(r){operators=r.data||[];renderOpUI();renderOpFilterUI();});})
+    .on('postgres_changes',{event:'*',schema:'public',table:'memos'},function(){sb.from('memos').select('*').order('pinned',{ascending:false}).order('created_at',{ascending:false}).then(function(r){memos=r.data||[];updateMemoCount();if(memoOpen){sb.from('memo_comments').select('*').order('created_at',{ascending:true}).then(function(cr){memoComments={};(cr.data||[]).forEach(function(c){if(!memoComments[c.memo_id])memoComments[c.memo_id]=[];memoComments[c.memo_id].push(c);});renderMemos();});}if(activeId)renderPanelMemos(activeId);});})
+    .on('postgres_changes',{event:'*',schema:'public',table:'memo_comments'},function(){sb.from('memo_comments').select('*').order('created_at',{ascending:true}).then(function(cr){memoComments={};(cr.data||[]).forEach(function(c){if(!memoComments[c.memo_id])memoComments[c.memo_id]=[];memoComments[c.memo_id].push(c);});if(memoOpen)renderMemos();if(activeId)renderPanelMemos(activeId);});})
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'kml_layers'},function(){loadKmlLayers();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'app_settings'},function(e){if(e.new&&e.new.key==='period_config'&&e.new.value){periodCfg=e.new.value;renderList();toast('分界設定已更新','info');}})
+    .subscribe();
+}
+
+function addAsset(row,sd){if(assets.has(row.id))return;if(row.type==='img')addImg(row,sd);else addPts(row,sd);}
+function addImg(row,sd){if(assets.has(row.id))return;var b=row.bounds_json;if(!b||b.w==null)return;var sw=to84(b.w,b.s),ne=to84(b.e,b.n);function mkBounds(){return L.latLngBounds(L.latLng(sw[1],sw[0]),L.latLng(ne[1],ne[0]));}var overlay=L.imageOverlay(row.img_url||row.img_data||'',mkBounds(),{opacity:0.85,interactive:false}).addTo(map);var rect=L.rectangle(mkBounds(),{color:sColor(sd&&sd.status),weight:2,fill:false,interactive:true}).addTo(map);rect.bindTooltip(row.display_name,{className:'tt',sticky:true,permanent:false});var fn=function(){openPanel(row.id);};rect.on('click',fn);assets.set(row.id,{type:'img',rect:rect,overlay:overlay,mkBounds:mkBounds,_clickHandler:fn,name:row.display_name,display_name:row.display_name,statusData:sd,manual_period:row.manual_period||''});}
+function parseDMS(val){if(val==null)return null;if(typeof val==='number')return isNaN(val)?null:val;var s=String(val).trim();if(/^-?[\d.]+$/.test(s))return parseFloat(s);var parts=s.match(/[\d.]+/g);if(!parts||parts.length<2)return null;return parseFloat(parts[0])+parseFloat(parts[1])/60+parseFloat(parts[2]||0)/3600;}
+function addPts(row,sd){var group=L.featureGroup().addTo(map);var color=sColor(sd&&sd.status||'none');var loaded=false;function ensureLoaded(){if(loaded)return Promise.resolve();loaded=true;var p;if(row.points_url){p=fetch(row.points_url).then(function(r){return r.json();}).then(function(json){return Array.isArray(json)?json:json&&json.type==='FeatureCollection'?json.features||[]:json&&json.type==='Feature'?[json]:[];}).catch(function(){return [];});}else if(row.points_json){var raw=row.points_json;p=Promise.resolve(Array.isArray(raw)?raw:raw&&raw.type==='FeatureCollection'?raw.features||[]:raw&&raw.type==='Feature'?[raw]:[]);}else p=Promise.resolve([]);return p.then(function(features){features.forEach(function(f){var lat=null,lng=null;if(f.geometry&&f.geometry.coordinates){var cx=parseFloat(f.geometry.coordinates[0]),cy=parseFloat(f.geometry.coordinates[1]);if(!isNaN(cx)&&!isNaN(cy)){if(looksWGS84(cx,cy)){lng=cx;lat=cy;}else{var w=to84(cx,cy);lng=w[0];lat=w[1];}}}if(lat===null){var pp=f.properties||{};var pLat=parseDMS(pp['緯度']!=null?pp['緯度']:pp['lat']!=null?pp['lat']:pp['latitude']);var pLng=parseDMS(pp['經度']!=null?pp['經度']:pp['lng']!=null?pp['lng']:pp['longitude']);if(pLat!==null&&pLng!==null&&pLat>20&&pLat<30&&pLng>100&&pLng<130){lat=pLat;lng=pLng;}}if(lat!==null&&lng!==null){var marker=L.circleMarker([lat,lng],{radius:6,fillColor:color,color:color,weight:0,fillOpacity:1,renderer:canvasRenderer}).addTo(group);var label=getStdProps(f.properties||{}).POINT_NAME||null;if(label)marker.bindTooltip(label,{className:'tt',sticky:true,permanent:false});}});var a=assets.get(row.id);if(a){a._rawFeatures=features;var gb=group.getBounds();if(gb.isValid())a.mkBounds=function(){return gb;};}});}group.bindTooltip(row.display_name,{className:'tt',sticky:true});var fn=function(){ensureLoaded();openPanel(row.id);};group.on('click',fn);assets.set(row.id,{type:'point',visual:group,mkBounds:null,_clickHandler:fn,_ensureLoaded:ensureLoaded,name:row.display_name,display_name:row.display_name,statusData:sd,_rawFeatures:[],manual_period:row.manual_period||''});ensureLoaded();}
+function removeLayer(id){var a=assets.get(id);if(!a)return;if(a.type==='img'){map.removeLayer(a.rect);map.removeLayer(a.overlay);}else map.removeLayer(a.visual);assets.delete(id);}
+function applyMapStyles(){var fitNeeded=curOp!=='all'||activePeriod!=='all';var csw=null,cne=null;assets.forEach(function(a){var op=a.statusData&&a.statusData.operator_name||null;var st=a.statusData&&a.statusData.status||'none';var period=effectivePeriod(a);var opMatch=curOp==='all'||(op===curOp&&(st==='claimed'||st==='done'));var periodMatch=activePeriod==='all'||period===activePeriod;var show=opMatch&&periodMatch;if(a.type==='img'){a.overlay.setOpacity(show?0.85:0);a.rect.setStyle({color:sColor(st),opacity:show?1:0,fillOpacity:0});if(show)a.rect.on('click',a._clickHandler);else a.rect.off('click',a._clickHandler);}else{var c=sColor(st);a.visual.eachLayer(function(l){if(l.setStyle)l.setStyle({fillColor:c,color:c,fillOpacity:show?1:0,opacity:show?1:0});});if(show)a.visual.on('click',a._clickHandler);else a.visual.off('click',a._clickHandler);}if(show&&fitNeeded&&a.mkBounds){var bd=a.mkBounds();if(bd.isValid()){if(!csw){csw=bd.getSouthWest();cne=bd.getNorthEast();}else{csw=L.latLng(Math.min(csw.lat,bd.getSouth()),Math.min(csw.lng,bd.getWest()));cne=L.latLng(Math.max(cne.lat,bd.getNorth()),Math.max(cne.lng,bd.getEast()));}}}});if(fitNeeded&&csw&&cne)map.fitBounds(L.latLngBounds(csw,cne),{padding:[80,80],maxZoom:17,animate:false});}
+function renderList(){var list=document.getElementById('asset-list');var kw=(document.getElementById('search-input')&&document.getElementById('search-input').value||'').trim().toLowerCase();var gDone=0,gTotal=0;assets.forEach(function(a){gTotal++;if(a.statusData&&a.statusData.status==='done')gDone++;});var gp=gTotal?Math.round(gDone/gTotal*100):0;document.getElementById('stat-percent').innerText=gp+'%';document.getElementById('progress-bar').style.width=gp+'%';var sorted=[];assets.forEach(function(a,id){sorted.push([id,a]);});sorted.sort(function(a,b){var cmp=a[1].name.localeCompare(b[1].name,'zh-TW');return sortOrder==='asc'?cmp:-cmp;});var frag=document.createDocumentFragment();if(curTab==='img'){sorted.forEach(function(pair){var id=pair[0],asset=pair[1];if(asset.type!=='img')return;var st=asset.statusData&&asset.statusData.status||'none';var op=asset.statusData&&asset.statusData.operator_name||null;if(curFilter!=='all'&&st!==curFilter)return;if(curOp!=='all'&&op!==curOp)return;if(kw&&asset.name.toLowerCase().indexOf(kw)<0)return;frag.appendChild(makeCard(id,asset,kw));});}else{var PERIOD_ORDER=['初','中','末','其他'];var tree=new Map();PERIOD_ORDER.forEach(function(p){tree.set(p,new Map());});sorted.forEach(function(pair){var id=pair[0],asset=pair[1];if(asset.type!=='point')return;var st=asset.statusData&&asset.statusData.status||'none';var op=asset.statusData&&asset.statusData.operator_name||null;if(curFilter!=='all'&&st!==curFilter)return;if(curOp!=='all'&&op!==curOp)return;if(kw&&asset.name.toLowerCase().indexOf(kw)<0)return;var period=effectivePeriod(asset);if(activePeriod!=='all'&&period!==activePeriod)return;var mm=getMonth(asset.name)||'??';var mmdd=getMMDD(asset.name)||'????';var pMap=tree.get(period)||tree.get('其他');if(!pMap.has(mm))pMap.set(mm,new Map());if(!pMap.get(mm).has(mmdd))pMap.get(mm).set(mmdd,[]);pMap.get(mm).get(mmdd).push([id,asset]);});tree.forEach(function(mMap,period){if(!mMap.size)return;var pKey='p:'+period;var pDone=0,pTotal=0;mMap.forEach(function(dMap){dMap.forEach(function(items){items.forEach(function(pair){pTotal++;if(pair[1].statusData&&pair[1].statusData.status==='done')pDone++;});});});var pPct=pTotal?Math.round(pDone/pTotal*100):0;var pDefCollapsed=defaultCollapsed(pKey,pPct);var pCollapsed=isCollapsed(pKey,pDefCollapsed);var pHdr=document.createElement('div');pHdr.className='group-hdr level-period';pHdr.innerHTML='<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:13px;font-weight:900;color:var(--accent);">'+period+'</span><span style="font-size:10px;color:var(--text-muted);">'+pTotal+' 個</span>'+(pPct===100?'<span style="font-size:10px;font-weight:800;color:#10b981;">✓ 完工</span>':'')+'</div><div style="display:flex;align-items:center;gap:7px;"><div style="width:56px;height:4px;background:var(--border);border-radius:99px;overflow:hidden;"><div style="width:'+pPct+'%;height:100%;background:linear-gradient(90deg,#6366f1,#10b981);border-radius:99px;"></div></div><span style="font-size:10px;font-weight:700;color:'+(pPct===100?'#10b981':'var(--accent)')+';">'+pPct+'%</span><span style="font-size:11px;color:var(--text-muted);">'+(pCollapsed?'▶':'▼')+'</span></div>';(function(k,def){pHdr.addEventListener('click',function(){toggleCollapse(k,def);});})(pKey,pDefCollapsed);frag.appendChild(pHdr);if(pCollapsed)return;var pBody=document.createElement('div');pBody.style.cssText='display:flex;flex-direction:column;gap:2px;margin-top:2px;';var mmArr=[];mMap.forEach(function(v,k){mmArr.push([k,v]);});mmArr.sort(function(a,b){return a[0].localeCompare(b[0]);});mmArr.forEach(function(mPair){var mm=mPair[0],dMap=mPair[1];var mKey='m:'+period+':'+mm;var mDone=0,mTotal=0;dMap.forEach(function(items){items.forEach(function(pair){mTotal++;if(pair[1].statusData&&pair[1].statusData.status==='done')mDone++;});});var mPct=mTotal?Math.round(mDone/mTotal*100):0;var mDefCollapsed=defaultCollapsed(mKey,mPct);var mCollapsed=isCollapsed(mKey,mDefCollapsed);var mHdr=document.createElement('div');mHdr.className='group-hdr level-month';mHdr.innerHTML='<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:11px;font-weight:800;color:var(--text-sub);">'+(mm==='??'?'未知月份':monthLabel(mm))+'</span><span style="font-size:10px;color:var(--text-muted);">'+mTotal+'</span>'+(mPct===100?'<span style="font-size:9px;font-weight:800;color:#10b981;">✓</span>':'')+'</div><div style="display:flex;align-items:center;gap:5px;"><span style="font-size:10px;font-weight:700;color:'+(mPct===100?'#10b981':'var(--text-sub)')+';">'+mPct+'%</span><span style="font-size:10px;color:var(--text-muted);">'+(mCollapsed?'▶':'▼')+'</span></div>';(function(k,def){mHdr.addEventListener('click',function(){toggleCollapse(k,def);});})(mKey,mDefCollapsed);pBody.appendChild(mHdr);if(mCollapsed)return;var mBody=document.createElement('div');mBody.style.cssText='display:flex;flex-direction:column;gap:2px;margin-top:2px;';var ddArr=[];dMap.forEach(function(v,k){ddArr.push([k,v]);});ddArr.sort(function(a,b){return a[0].localeCompare(b[0]);});ddArr.forEach(function(dPair){var mmdd=dPair[0],items=dPair[1];var dKey='d:'+period+':'+mmdd;var dDone=items.filter(function(pair){return pair[1].statusData&&pair[1].statusData.status==='done';}).length;var dPct=items.length?Math.round(dDone/items.length*100):0;var dDefCollapsed=defaultCollapsed(dKey,dPct);var dCollapsed=isCollapsed(dKey,dDefCollapsed);var dHdr=document.createElement('div');dHdr.className='group-hdr level-day';dHdr.innerHTML='<div style="display:flex;align-items:center;gap:5px;"><span style="font-size:10px;font-weight:700;color:var(--text-muted);">'+(mmdd==='????'?'未知日期':dayLabel(mmdd))+'</span></div><div style="display:flex;align-items:center;gap:4px;"><span style="font-size:10px;color:'+(dDone===items.length&&items.length>0?'#10b981':'var(--text-muted)')+';">'+dDone+'/'+items.length+'</span><span style="font-size:10px;color:var(--text-muted);">'+(dCollapsed?'▶':'▼')+'</span></div>';(function(k,def){dHdr.addEventListener('click',function(){toggleCollapse(k,def);});})(dKey,dDefCollapsed);mBody.appendChild(dHdr);if(dCollapsed)return;var dBody=document.createElement('div');dBody.style.cssText='display:flex;flex-direction:column;gap:3px;margin-top:2px;padding-left:22px;';items.forEach(function(pair){dBody.appendChild(makeCard(pair[0],pair[1],kw));});mBody.appendChild(dBody);});pBody.appendChild(mBody);});frag.appendChild(pBody);});}list.innerHTML='';list.appendChild(frag);lucide.createIcons();}
+function makeCard(id,asset,kw){kw=kw||'';var st=asset.statusData&&asset.statusData.status||'none';var op=asset.statusData&&asset.statusData.operator_name||null;var dotC=sColor(st),sub='等待認領',subStyle='color:#ef4444;font-weight:600;';if(st==='claimed'){sub='👷 '+(op||'作業中');subStyle='color:#f59e0b;font-weight:700;';}if(st==='done'){sub='✅ '+(op||'已完工');subStyle='color:#10b981;font-weight:700;';}var nameHtml=highlight(asset.name,kw);var manPeriod=asset.manual_period||'',autoPer=autoPeriod(asset.name)||'';var shownPeriod=manPeriod||autoPer,isManual=!!manPeriod;var unresolvedMemos=memos.filter(function(m){return m.asset_id===id&&!m.resolved;}).length;var memoTag=unresolvedMemos?'<span style="display:inline-flex;align-items:center;gap:2px;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:800;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#ef4444;">📝'+unresolvedMemos+'</span>':'';var card=document.createElement('div');card.className='asset-card'+(activeId===id?' active':'');card.id='card-'+id;var periodBtn=document.createElement('div');periodBtn.className='period-inline-btn'+(isManual?'':' auto');periodBtn.style.position='relative';periodBtn.title=isManual?'手動：'+manPeriod:'點擊設定期別';periodBtn.innerHTML=shownPeriod?shownPeriod+(isManual?'<span style="font-size:8px;margin-left:1px;opacity:.7;">▲</span>':'<span style="font-size:8px;margin-left:1px;opacity:.5;">▼</span>'):'?<span style="font-size:8px;margin-left:1px;opacity:.5;">▼</span>';(function(aid){periodBtn.addEventListener('click',function(e){togglePeriodPopover(e,aid);});})(id);var focusDiv=document.createElement('div');focusDiv.style.cssText='flex:1;min-width:0;cursor:pointer;';focusDiv.innerHTML='<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;"><span style="font-weight:700;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;">'+nameHtml+'</span>'+memoTag+'</div><div style="font-size:11px;margin-top:1px;'+subStyle+'">'+sub+'</div>';(function(aid){focusDiv.addEventListener('click',function(){focusOn(aid);});})(id);var btnWrap=document.createElement('div');btnWrap.style.cssText='display:flex;gap:2px;flex-shrink:0;';if(asset.type==='point'){var csvBtn=document.createElement('button');csvBtn.style.cssText='width:24px;height:24px;border-radius:6px;border:1px solid rgba(16,185,129,.35);background:rgba(16,185,129,.18);cursor:pointer;color:#10b981;display:flex;align-items:center;justify-content:center;font-size:11px;';csvBtn.title='匯出 CSV';csvBtn.textContent='↓';(function(aid){csvBtn.addEventListener('click',function(){downloadCSV(aid);});})(id);btnWrap.appendChild(csvBtn);}var editBtn=document.createElement('button');editBtn.style.cssText='width:24px;height:24px;border-radius:6px;border:none;background:none;cursor:pointer;color:var(--text-muted);display:flex;align-items:center;justify-content:center;font-size:13px;opacity:0.6;';editBtn.title='改名';editBtn.textContent='✏️';(function(aid){editBtn.addEventListener('click',function(){editAssetName(aid);});})(id);var delBtn=document.createElement('button');delBtn.style.cssText='width:24px;height:24px;border-radius:6px;border:none;background:none;cursor:pointer;color:var(--text-muted);display:flex;align-items:center;justify-content:center;font-size:13px;opacity:0.6;';delBtn.title='刪除';delBtn.textContent='🗑️';(function(aid){delBtn.addEventListener('click',function(){deleteAsset(aid);});})(id);btnWrap.append(editBtn,delBtn);var dot=document.createElement('div');dot.style.cssText='width:7px;height:7px;border-radius:50%;background:'+dotC+';flex-shrink:0;box-shadow:0 0 5px '+dotC+'66;';card.append(dot,focusDiv,periodBtn,btnWrap);return card;}
+function refreshAll(){applyMapStyles();renderList();}
+function toggleSort(){sortOrder=sortOrder==='asc'?'desc':'asc';document.getElementById('sort-btn').innerText=sortOrder==='asc'?'↑':'↓';renderList();}
+function setFilter(f){curFilter=f;document.querySelectorAll('.chip[data-filter]').forEach(function(c){c.classList.toggle('active',c.dataset.filter===f);});collapsedGroups.forEach(function(v,k){if(k.indexOf('d:')===0)collapsedGroups.delete(k);});refreshAll();}
+function setTypeTab(t){curTab=t;document.querySelectorAll('.tab').forEach(function(c){c.classList.toggle('active',c.dataset.type===t);});refreshAll();}
+function setOpFilter(n){curOp=n;document.querySelectorAll('.op-chip').forEach(function(c){c.classList.toggle('active',c.dataset.op===n);});collapsedGroups.forEach(function(v,k){if(k.indexOf('d:')===0)collapsedGroups.delete(k);});refreshAll();}
+function renderOpFilterUI(){var el=document.getElementById('op-filter-list');el.innerHTML='<div class="op-chip '+(curOp==='all'?'active':'')+'" data-op="all" onclick="setOpFilter(\'all\')">全部</div>';operators.forEach(function(op){var d=document.createElement('div');d.className='op-chip'+(curOp===op.name?' active':'');d.dataset.op=op.name;d.innerText=op.name;d.onclick=function(){setOpFilter(op.name);};el.appendChild(d);});}
+function toggleTools(){var el=document.getElementById('tools-wrap'),icon=document.getElementById('fold-icon');var closed=el.classList.toggle('closed');icon.style.transform=closed?'rotate(180deg)':'rotate(0deg)';}
+function scrollToCard(id){var asset=assets.get(id);if(!asset)return;var period=effectivePeriod(asset);var mm=getMonth(asset.name)||'??';var mmdd=getMMDD(asset.name)||'????';collapsedGroups.set('p:'+period,false);collapsedGroups.set('m:'+period+':'+mm,false);collapsedGroups.set('d:'+period+':'+mmdd,false);if(activePeriod!=='all'&&activePeriod!==period){activePeriod='all';document.querySelectorAll('.period-chip').forEach(function(c){c.classList.toggle('active',c.dataset.period==='all');});}renderList();requestAnimationFrame(function(){var card=document.getElementById('card-'+id);if(card){card.scrollIntoView({behavior:'smooth',block:'center'});card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash');setTimeout(function(){card.classList.remove('flash');},1800);}});}
+function focusOn(id){var a=assets.get(id);if(!a)return;var p=a._ensureLoaded?a._ensureLoaded():Promise.resolve();p.then(function(){if(a.mkBounds)map.fitBounds(a.mkBounds(),{padding:[80,80],animate:true});openPanel(id);if(a.type==='img'){var cnt=0;var orig=sColor(a.statusData&&a.statusData.status||'none');var fl=setInterval(function(){cnt++;a.rect.setStyle({color:cnt%2===0?orig:'#fff',weight:cnt%2===0?2:3});if(cnt>=6){clearInterval(fl);a.rect.setStyle({color:orig,weight:2});}},180);}else{var cnt2=0;var fl2=setInterval(function(){cnt2++;a.visual.eachLayer(function(l){if(l.setStyle)l.setStyle({radius:cnt2%2===0?6:10});});if(cnt2>=6){clearInterval(fl2);a.visual.eachLayer(function(l){if(l.setStyle)l.setStyle({radius:6});});}},180);}scrollToCard(id);});}
+function openPanel(id){activeId=id;var a=assets.get(id),s=a.statusData,st=s&&s.status||'none';document.getElementById('ui-name').innerText=a.name;var badge=document.getElementById('ui-badge');var claimBtn=document.getElementById('btn-claim'),doneBtn=document.getElementById('btn-done'),releaseBtn=document.getElementById('btn-release');var lockNotice=document.getElementById('lock-notice'),lockMsg=document.getElementById('lock-msg');if(st==='done')badge.innerHTML='<span style="display:inline-block;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:700;background:rgba(16,185,129,.1);color:#10b981;border:1px solid rgba(16,185,129,.25);">✅ 已完工：'+(s&&s.operator_name)+'</span>';else if(st==='claimed')badge.innerHTML='<span style="display:inline-block;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:700;background:rgba(245,158,11,.1);color:#f59e0b;border:1px solid rgba(245,158,11,.25);">👷 作業中：'+(s&&s.operator_name)+'</span>';else badge.innerHTML='<span style="display:inline-block;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:700;background:var(--input-bg);color:var(--text-muted);border:1px solid var(--border);">開放認領</span>';var curUser=document.getElementById('user-select').value;var isOwner=s&&s.operator_name===curUser;if(st==='claimed'&&!isOwner){claimBtn.className='btn-accent btn-locked';claimBtn.onclick=null;doneBtn.className='btn-green btn-locked';doneBtn.onclick=null;releaseBtn.onclick=null;lockNotice.style.display='flex';lockMsg.innerText='此區塊由 '+(s&&s.operator_name)+' 認領中。';}else if(st==='done'){claimBtn.className='btn-accent btn-locked';claimBtn.onclick=null;doneBtn.className='btn-green btn-locked';doneBtn.onclick=null;releaseBtn.onclick=function(){updateStatus('none');};lockNotice.style.display='flex';lockMsg.innerText='此區塊已完工，如需修改請先釋出。';}else{claimBtn.className='btn-accent';claimBtn.onclick=function(){updateStatus('claimed');};doneBtn.className='btn-green';doneBtn.onclick=function(){updateStatus('done');};releaseBtn.onclick=function(){updateStatus('none');};lockNotice.style.display='none';}document.getElementById('action-panel').style.display='block';document.getElementById('panel-memo-input-wrap').classList.remove('open');if(document.getElementById('panel-memo-ta'))document.getElementById('panel-memo-ta').value='';renderPanelMemos(id);lucide.createIcons();refreshAll();if(a.type==='point')scrollToCard(id);else{if(curTab!=='img'){curTab='img';document.querySelectorAll('.tab').forEach(function(c){c.classList.toggle('active',c.dataset.type==='img');});renderList();}requestAnimationFrame(function(){var card=document.getElementById('card-'+id);if(card){card.scrollIntoView({behavior:'smooth',block:'center'});card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash');setTimeout(function(){card.classList.remove('flash');},1800);}});}}
+function closePanel(){document.getElementById('action-panel').style.display='none';activeId=null;refreshAll();}
+function updateStatus(status){if(!activeId)return;var uName=document.getElementById('user-select').value;if(!uName&&status!=='none'){alert('請先選擇作業員');return;}var a=assets.get(activeId);var oldStatus=a&&a.statusData&&a.statusData.status||'none';var action=status==='claimed'?'claimed':status==='done'?'done':'released';sb.from('asset_status').upsert({asset_id:activeId,status:status,operator_name:status==='none'?null:uName,updated_at:new Date().toISOString()},{onConflict:'asset_id'}).then(function(){return writeAudit(activeId,a&&a.display_name||'',action,uName,oldStatus,status);}).then(function(){closePanel();});}
+function triggerFile(id){document.getElementById(id).click();}
+function doUpload(){var name=document.getElementById('modal-name').value.trim();if(!name)return;var btn=document.getElementById('modal-confirm'),st=document.getElementById('modal-status');btn.disabled=true;st.style.display='block';var uName=document.getElementById('user-select').value;var p;if(editId){var oldName=assets.get(editId)&&assets.get(editId).display_name||'';p=sb.from('assets').update({display_name:name,manual_period:pendingManualPeriod||null}).eq('id',editId).then(function(){return writeAudit(editId,name,'renamed',uName,oldName,name);}).then(function(){toast('已更新','success');});}else if(pendingPoints){var geojson={type:'FeatureCollection',features:pendingPoints};var fname=Date.now()+'.geojson';var blob=new Blob([JSON.stringify(geojson)],{type:'application/geo+json'});st.innerText='上傳至 Storage...';p=sb.storage.from('asset-points').upload(fname,blob,{contentType:'application/geo+json',upsert:false}).then(function(r){var pointsUrl=null;if(!r.error)pointsUrl=sb.storage.from('asset-points').getPublicUrl(fname).data.publicUrl;else toast('Storage 失敗','warn');st.innerText='寫入資料庫...';return sb.from('assets').insert({display_name:name,type:'point',points_url:pointsUrl||null,points_json:pointsUrl?null:pendingPoints,manual_period:pendingManualPeriod||null}).select().single();}).then(function(res){if(res.error)throw res.error;return writeAudit(res.data&&res.data.id,name,'created',uName,null,name);}).then(function(){toast('點位圖層已上傳 ✓','success');});}else if(pendingImg&&pendingJson){var fname2=Date.now()+'.jpg';var blob2=b64Blob(pendingImg);p=sb.storage.from('asset-images').upload(fname2,blob2,{contentType:'image/jpeg'}).then(function(r){var imgUrl=null,imgData=null;if(!r.error)imgUrl=sb.storage.from('asset-images').getPublicUrl(fname2).data.publicUrl;else imgData=pendingImg;return sb.from('assets').insert({display_name:name,type:'img',bounds_json:pendingJson,img_url:imgUrl,img_data:imgData,manual_period:pendingManualPeriod||null}).select().single();}).then(function(res){return writeAudit(res.data&&res.data.id,name,'created',uName,null,name);}).then(function(){toast('PNG 圖層已上傳','success');});}else p=Promise.resolve();p.then(function(){closeModal();}).catch(function(err){alert('上傳失敗：'+err.message);}).then(function(){btn.disabled=false;st.style.display='none';});}
+function b64Blob(d){var parts=d.split(','),mime=parts[0].match(/:(.*?);/)[1];var bin=atob(parts[1]),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new Blob([u],{type:mime});}
+function editAssetName(id){editId=id;pendingManualPeriod=assets.get(id)&&assets.get(id).manual_period||'';selectModalPeriod(pendingManualPeriod);document.getElementById('modal-title').innerText='修改名稱';document.getElementById('modal-name').value=assets.get(id).name;document.getElementById('modal-save').style.display='flex';}
+function deleteAsset(id){if(!confirm('確定刪除此圖層？'))return;var a=assets.get(id);var uName=document.getElementById('user-select').value;writeAudit(id,a&&a.display_name||'','deleted',uName,null,null).then(function(){return sb.from('assets').delete().eq('id',id);});}
+function closeModal(){document.getElementById('modal-save').style.display='none';editId=null;pendingJson=null;pendingImg=null;pendingPoints=null;pendingManualPeriod='';}
+function openHelp(){document.getElementById('modal-help').style.display='flex';lucide.createIcons();}
+function closeHelp(){document.getElementById('modal-help').style.display='none';}
+function renderOpUI(){var sel=document.getElementById('user-select'),cur=sel.value;sel.innerHTML='<option value="">選擇作業員...</option>';operators.forEach(function(op){var o=document.createElement('option');o.value=op.name;o.innerText=op.name;sel.appendChild(o);});sel.value=cur;var list=document.getElementById('op-list');list.innerHTML='';operators.forEach(function(op){var item=document.createElement('div');item.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:9px 11px;background:var(--card-bg);border:1px solid var(--border);border-radius:10px;';item.innerHTML='<div style="display:flex;align-items:center;gap:9px;"><div style="width:7px;height:7px;border-radius:50%;background:var(--accent);"></div><span style="font-weight:700;font-size:14px;color:var(--text);">'+op.name+'</span></div><div style="display:flex;gap:3px;"><button class="ren-btn" style="width:27px;height:27px;border-radius:6px;border:none;background:none;cursor:pointer;font-size:14px;">✏️</button><button class="dop-btn" style="width:27px;height:27px;border-radius:6px;border:none;background:none;cursor:pointer;font-size:14px;">🗑️</button></div>';(function(oid,oname){item.querySelector('.ren-btn').addEventListener('click',function(){renameOperator(oid,oname);});item.querySelector('.dop-btn').addEventListener('click',function(){deleteOperator(oid);});})(op.id,op.name);list.appendChild(item);});}
+function addOperator(){var name=document.getElementById('new-op-name').value.trim();if(name){sb.from('operators').insert({name:name}).then(function(){document.getElementById('new-op-name').value='';toast(name+' 已新增','success');});}}
+function deleteOperator(id){if(confirm('移除此作業員？'))sb.from('operators').delete().eq('id',id);}
+function renameOperator(id,old){var n=prompt('修改姓名：',old);if(!n||n===old)return;var nn=n.trim();sb.from('operators').update({name:nn}).eq('id',id).then(function(){return sb.from('asset_status').update({operator_name:nn}).eq('operator_name',old);}).then(function(){toast('名稱已更新','success');});}
+function openOpManager(){document.getElementById('modal-op').style.display='flex';lucide.createIcons();}
+function closeOpManager(){document.getElementById('modal-op').style.display='none';}
+
+window.onload=init;
+</script>
+</body>
+</html>
