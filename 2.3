@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>花蓮人行道圖資協作系統</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+:root{
+  --bg:#0a0f1e;--surface:#111827;--surface2:#1f2937;--border:rgba(255,255,255,0.07);
+  --text:#f1f5f9;--text-muted:#64748b;--text-sub:#94a3b8;
+  --card-bg:rgba(255,255,255,0.02);--card-hover:rgba(255,255,255,0.05);
+  --input-bg:rgba(255,255,255,0.04);--header-bg:rgba(10,15,30,0.97);
+  --sidebar-bg:rgba(17,24,39,0.98);--accent:#6366f1;--accent2:#8b5cf6;
+  --accent-dim:rgba(99,102,241,0.12);--accent-border:rgba(99,102,241,0.25);
+  --green:#10b981;--amber:#f59e0b;--sidebar-w:400px;--header-h:76px;
+  --transition:background 0.3s,color 0.3s,border-color 0.3s;
+}
+[data-theme="light"]{
+  --bg:#f1f5f9;--surface:#ffffff;--surface2:#f8fafc;--border:rgba(0,0,0,0.08);
+  --text:#0f172a;--text-muted:#94a3b8;--text-sub:#64748b;
+  --card-bg:rgba(255,255,255,0.8);--card-hover:rgba(99,102,241,0.04);
+  --input-bg:rgba(0,0,0,0.03);--header-bg:rgba(255,255,255,0.97);
+  --sidebar-bg:rgba(255,255,255,0.98);
+  --accent-dim:rgba(99,102,241,0.08);--accent-border:rgba(99,102,241,0.2);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter','Noto Sans TC',sans-serif;background:var(--bg);color:var(--text);overflow:hidden;height:100vh;display:flex;flex-direction:column;transition:var(--transition);}
+::-webkit-scrollbar{width:3px;}
+::-webkit-scrollbar-thumb{background:rgba(128,128,128,0.2);border-radius:99px;}
+#loading{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.spinner{width:44px;height:44px;border:3px solid rgba(99,102,241,0.15);border-top-color:#6366f1;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:18px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes live-pulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,0.7);opacity:1;}60%{box-shadow:0 0 0 6px rgba(16,185,129,0);opacity:0.75;}100%{box-shadow:0 0 0 0 rgba(16,185,129,0);opacity:1;}}
+@keyframes memo-badge-pop{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes memo-row-in{0%{opacity:0;transform:translateY(4px)}100%{opacity:1;transform:translateY(0)}}
+#db-dot.live{animation:live-pulse 1.6s ease-out infinite;}
+header{height:var(--header-h);background:var(--header-bg);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;z-index:2000;flex-shrink:0;transition:var(--transition);}
+.sidebar{width:var(--sidebar-w);flex-shrink:0;background:var(--sidebar-bg);backdrop-filter:blur(20px);border-right:1px solid var(--border);display:flex;flex-direction:column;height:100%;transition:margin .4s cubic-bezier(.16,1,.3,1),var(--transition);}
+.sidebar.collapsed{margin-left:calc(-1 * var(--sidebar-w));}
+.tt{background:var(--surface)!important;color:var(--text)!important;border:1px solid var(--border)!important;border-radius:8px;padding:5px 12px;font-weight:700;font-size:12px;box-shadow:0 4px 20px rgba(0,0,0,0.2);}
+.chip{cursor:pointer;white-space:nowrap;font-weight:600;font-size:12px;padding:4px 12px;border-radius:99px;border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);transition:all .2s;}
+.chip:hover{border-color:var(--accent-border);color:var(--accent);}
+.chip.active{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent);}
+.op-chip{cursor:pointer;white-space:nowrap;font-weight:600;font-size:12px;padding:3px 10px;border-radius:99px;border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);transition:all .2s;}
+.op-chip:hover{border-color:var(--accent-border);color:var(--accent);}
+.op-chip.active{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent);}
+.period-chip{cursor:pointer;white-space:nowrap;font-weight:700;font-size:12px;padding:4px 13px;border-radius:99px;border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);transition:all .2s;}
+.period-chip:hover{border-color:var(--accent-border);color:var(--accent);}
+.period-chip.active{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent);}
+.tab{cursor:pointer;padding:10px 0;font-weight:700;font-size:13px;border-bottom:2px solid transparent;transition:all .2s;color:var(--text-muted);text-align:center;flex:1;}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.btn-accent{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;cursor:pointer;font-weight:700;transition:all .2s;border-radius:12px;}
+.btn-accent:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 8px 25px rgba(99,102,241,0.3);}
+.btn-green{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.25);color:#10b981;border-radius:12px;cursor:pointer;font-weight:700;transition:all .2s;}
+.btn-green:hover{background:rgba(16,185,129,0.2);}
+.btn-ghost{background:var(--input-bg);border:1px solid var(--border);color:var(--text-muted);border-radius:10px;cursor:pointer;font-weight:600;transition:all .2s;}
+.btn-ghost:hover{background:var(--card-hover);color:var(--text);}
+.btn-locked{background:var(--input-bg)!important;border:1px solid var(--border)!important;color:var(--text-muted)!important;opacity:.4!important;cursor:not-allowed!important;transform:none!important;box-shadow:none!important;}
+.asset-card{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:10px;border:1px solid var(--border);background:var(--card-bg);transition:all .15s;}
+.asset-card:hover{background:var(--card-hover);border-color:var(--accent-border);}
+.asset-card.active{background:var(--accent-dim);border-color:var(--accent-border);}
+@keyframes card-flash{0%,100%{background:var(--accent-dim);border-color:var(--accent-border);}50%{background:rgba(99,102,241,0.32);border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,0.18);}}
+.asset-card.flash{animation:card-flash .38s ease-in-out 4;}
+.group-hdr{display:flex;align-items:center;justify-content:space-between;padding:6px 11px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;user-select:none;transition:all .15s;margin-top:4px;}
+.group-hdr:hover{border-color:var(--accent-border);}
+.group-hdr.level-period{background:var(--surface);border-left:2px solid var(--accent);padding-left:9px;}
+.group-hdr.level-month{background:var(--card-bg);border-left:2px solid rgba(99,102,241,0.3);padding-left:9px;margin-left:8px;}
+.group-hdr.level-day{background:transparent;border:1px dashed var(--border);padding-left:9px;margin-left:18px;}
+#tools-wrap{overflow:hidden;transition:max-height .35s cubic-bezier(.16,1,.3,1),opacity .2s;}
+#tools-wrap.closed{max-height:0!important;opacity:0;pointer-events:none;}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);z-index:4000;display:flex;align-items:center;justify-content:center;padding:24px;}
+.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:28px;max-width:440px;width:100%;box-shadow:0 25px 80px rgba(0,0,0,0.3);transition:var(--transition);}
+#action-panel{position:absolute;bottom:24px;left:24px;width:340px;background:var(--surface);backdrop-filter:blur(20px);border:1px solid var(--border);border-radius:22px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,0.3);z-index:2000;transition:var(--transition);}
+.prog-track{height:4px;background:var(--border);border-radius:99px;overflow:hidden;}
+.prog-fill{height:100%;border-radius:99px;transition:width .7s cubic-bezier(.16,1,.3,1);}
+.theme-btn{width:52px;height:28px;border-radius:99px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;position:relative;transition:all .3s;flex-shrink:0;}
+.theme-btn-knob{width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));position:absolute;top:3px;left:3px;transition:transform .3s cubic-bezier(.16,1,.3,1);display:flex;align-items:center;justify-content:center;}
+[data-theme="light"] .theme-btn-knob{transform:translateX(24px);}
+input[type=text],input[type=number],textarea,select{background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:10px;outline:none;font-family:inherit;transition:border-color .2s,var(--transition);}
+input[type=text]:focus,input[type=number]:focus,textarea:focus,select:focus{border-color:var(--accent-border);}
+input[type=text]::placeholder,textarea::placeholder{color:var(--text-muted);}
+select option{background:var(--surface);color:var(--text);}
+#toast{position:fixed;bottom:24px;right:24px;z-index:9000;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:12px;padding:11px 18px;font-size:13px;font-weight:600;color:var(--text);box-shadow:0 8px 30px rgba(0,0,0,0.2);transform:translateY(80px);opacity:0;transition:all .3s cubic-bezier(.16,1,.3,1);}
+#toast.show{transform:translateY(0);opacity:1;}
+#map{height:100%;width:100%;}
+#locate-input{background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:9px;outline:none;font-family:inherit;font-size:13px;font-weight:600;padding:6px 12px;width:210px;transition:border-color .2s,var(--transition);}
+#locate-input:focus{border-color:var(--accent-border);}
+#locate-input::placeholder{color:var(--text-muted);font-weight:500;}
+#locate-btn{height:32px;padding:0 14px;font-size:12px;font-weight:700;border:none;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;cursor:pointer;white-space:nowrap;}
+#locate-btn:hover{opacity:.88;}
+.hl{background:rgba(99,102,241,0.35);border-radius:3px;color:var(--text);}
+.donut-wrap{position:relative;display:flex;align-items:center;justify-content:center;}
+.donut-center{position:absolute;text-align:center;pointer-events:none;}
+#memo-panel{position:fixed;top:0;right:0;bottom:0;width:380px;background:var(--sidebar-bg);border-left:1px solid var(--border);z-index:3500;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .4s cubic-bezier(.16,1,.3,1);}
+#memo-panel.open{transform:translateX(0);}
+.memo-card{padding:12px 14px;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;transition:all .15s;}
+.memo-card:hover{background:var(--card-hover);}
+.memo-card.pinned{border-left:3px solid var(--amber);}
+.manual-period-tag{display:inline-flex;align-items:center;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:800;background:rgba(99,102,241,0.2);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;letter-spacing:.04em;}
+/* ── 可點擊期別標籤 ── */
+.period-inline-btn{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:800;cursor:pointer;border:1px solid rgba(99,102,241,0.4);background:rgba(99,102,241,0.12);color:#a5b4fc;transition:all .15s;user-select:none;position:relative;}
+.period-inline-btn:hover{background:rgba(99,102,241,0.25);border-color:var(--accent);}
+.period-inline-btn.auto{background:rgba(100,116,139,0.12);border-color:rgba(100,116,139,0.3);color:var(--text-muted);}
+.period-inline-btn.auto:hover{background:rgba(99,102,241,0.12);border-color:rgba(99,102,241,0.4);color:#a5b4fc;}
+/* 期別快選 popover */
+.period-popover{position:absolute;bottom:calc(100% + 6px);left:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:5px;display:flex;gap:4px;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,0.3);}
+.period-popover button{padding:4px 10px;border-radius:7px;border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;transition:all .15s;}
+.period-popover button:hover,.period-popover button.active{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent);}
+.mmdd-input{width:54px;padding:3px 7px;font-size:12px;font-weight:700;text-align:center;border-radius:7px;}
+.help-section{padding:14px 16px;border-radius:14px;margin-bottom:2px;}
+.help-section-title{font-size:11px;font-weight:800;letter-spacing:.1em;margin-bottom:9px;display:flex;align-items:center;gap:7px;}
+.help-section-body{font-size:12px;color:var(--text-sub);line-height:1.75;}
+.help-section-body p{margin-bottom:3px;}
+.help-section-body p:last-child{margin-bottom:0;}
+/* ── 批次上傳進度條 ── */
+#batch-progress-wrap{display:none;margin:0 12px 8px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;}
+#batch-progress-wrap.show{display:block;}
+.batch-prog-track{height:6px;background:var(--border);border-radius:99px;overflow:hidden;margin-top:6px;}
+.batch-prog-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#6366f1,#10b981);transition:width .3s;}
+/* ── 認領面板備忘錄區塊 ── */
+#panel-memo-section{margin-top:14px;border-top:1px solid var(--border);padding-top:12px;}
+#panel-memo-section .pm-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+#panel-memo-section .pm-title{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:var(--text-muted);letter-spacing:.1em;}
+#panel-memo-section .pm-add-btn{display:flex;align-items:center;gap:4px;padding:3px 9px;border-radius:7px;border:1px solid var(--accent-border);background:var(--accent-dim);color:var(--accent);cursor:pointer;font-size:11px;font-weight:700;transition:all .15s;}
+#panel-memo-section .pm-add-btn:hover{background:rgba(99,102,241,0.2);}
+.pm-memo-row{display:flex;align-items:flex-start;gap:7px;padding:7px 9px;border-radius:9px;background:var(--card-bg);border:1px solid var(--border);cursor:pointer;transition:all .15s;animation:memo-row-in .2s ease;}
+.pm-memo-row:hover{background:var(--card-hover);border-color:var(--accent-border);}
+.pm-memo-row.resolved{opacity:0.5;}
+.pm-memo-row .pm-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+.pm-memo-row .pm-content{flex:1;min-width:0;}
+.pm-memo-row .pm-text{font-size:12px;font-weight:600;color:var(--text);line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pm-memo-row .pm-meta{display:flex;align-items:center;gap:5px;margin-top:2px;}
+.pm-memo-row .pm-op{font-size:10px;font-weight:700;color:var(--accent);}
+.pm-memo-row .pm-time{font-size:10px;color:var(--text-muted);}
+.pm-memo-row .pm-comments{font-size:10px;font-weight:700;color:var(--text-muted);background:var(--surface2);border-radius:99px;padding:1px 6px;flex-shrink:0;}
+#panel-memo-input-wrap{display:none;margin-top:8px;gap:6px;flex-direction:column;}
+#panel-memo-input-wrap.open{display:flex;}
+#panel-memo-input-wrap textarea{padding:8px 10px;font-size:12px;resize:none;border-radius:9px;width:100%;}
+#panel-memo-input-wrap .pm-submit-row{display:flex;gap:6px;}
+#panel-memo-empty{text-align:center;padding:12px 0 4px;font-size:11px;color:var(--text-muted);font-style:italic;}
+</style>
+</head>
+<body>
+<div id="loading">
+  <div class="spinner"></div>
+  <p style="font-size:13px;font-weight:700;color:#6366f1;letter-spacing:.15em;">CONNECTING TO DATABASE</p>
+  <p style="font-size:11px;color:var(--text-muted);margin-top:5px;">花蓮人行道圖資協作系統</p>
+</div>
+<div id="toast"></div>
+
+<header>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <button id="btn-toggle" style="width:38px;height:38px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);flex-shrink:0;">
+      <i data-lucide="panel-left" style="width:16px;height:16px;"></i>
+    </button>
+    <div>
+      <div style="font-size:26px;font-weight:900;color:var(--text);letter-spacing:-.04em;line-height:1.1;">花蓮人行道圖資協作系統</div>
+      <div style="font-size:10px;font-weight:600;color:var(--text-muted);letter-spacing:.12em;margin-top:3px;">INFRASTRUCTURE · GIS COLLABORATION PLATFORM</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--input-bg);border:1px solid var(--border);border-radius:12px;">
+      <i data-lucide="crosshair" style="width:13px;height:13px;color:var(--accent);flex-shrink:0;"></i>
+      <input id="locate-input" type="text" placeholder="97座標：305000, 2652000">
+      <button id="locate-btn" onclick="locateCoord()">定位</button>
+    </div>
+    <button class="theme-btn" onclick="toggleTheme()">
+      <div class="theme-btn-knob"><i id="theme-icon" data-lucide="moon" style="width:11px;height:11px;color:#fff;"></i></div>
+    </button>
+    <button onclick="openHelp()" style="width:34px;height:34px;border-radius:99px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);">
+      <i data-lucide="help-circle" style="width:16px;height:16px;"></i>
+    </button>
+    <button onclick="toggleMemo()" id="memo-btn" style="display:flex;align-items:center;gap:6px;padding:7px 15px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;color:var(--text-muted);font-size:13px;font-weight:600;">
+      <i data-lucide="notebook-pen" style="width:14px;height:14px;"></i> 備忘錄
+      <span id="memo-count" style="display:none;background:#ef4444;color:#fff;border-radius:99px;padding:1px 7px;font-size:10px;font-weight:800;animation:memo-badge-pop .3s cubic-bezier(.16,1,.3,1);"></span>
+    </button>
+    <button onclick="openStats()" style="display:flex;align-items:center;gap:6px;padding:7px 15px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;color:var(--text-muted);font-size:13px;font-weight:600;">
+      <i data-lucide="bar-chart-2" style="width:14px;height:14px;"></i> 全員血條
+    </button>
+    <button onclick="openAudit()" style="display:flex;align-items:center;gap:6px;padding:7px 15px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;color:var(--text-muted);font-size:13px;font-weight:600;">
+      <i data-lucide="history" style="width:14px;height:14px;"></i> 操作紀錄
+    </button>
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 16px;border-radius:12px;border:1px solid var(--border);background:var(--input-bg);">
+      <div>
+        <div style="font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:.12em;margin-bottom:2px;">OPERATOR</div>
+        <select id="user-select" style="border:none;outline:none;font-weight:700;font-size:14px;color:var(--text);background:transparent;min-width:110px;cursor:pointer;">
+          <option value="">選擇里素隨...</option>
+        </select>
+      </div>
+      <div style="width:1px;height:28px;background:var(--border);margin:0 2px;"></div>
+      <button onclick="openOpManager()" style="width:29px;height:29px;border-radius:7px;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);">
+        <i data-lucide="settings-2" style="width:15px;height:15px;"></i>
+      </button>
+    </div>
+    <div style="display:flex;align-items:center;gap:5px;">
+      <div id="db-dot" style="width:8px;height:8px;border-radius:50%;background:#475569;"></div>
+      <span id="db-label" style="font-size:10px;font-weight:700;color:#475569;letter-spacing:.08em;">CONNECTING</span>
+    </div>
+  </div>
+</header>
+
+<div style="display:flex;flex:1;overflow:hidden;position:relative;">
+  <aside id="sidebar" class="sidebar">
+    <div style="padding:10px 12px 0;flex-shrink:0;">
+      <div style="display:flex;align-items:center;gap:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:10px;padding:7px 12px;margin-bottom:7px;">
+        <i data-lucide="search" style="width:13px;height:13px;color:var(--text-muted);flex-shrink:0;"></i>
+        <input id="search-input" type="text" placeholder="搜尋路段名稱..." oninput="renderList()" style="background:none;border:none;outline:none;font-size:13px;font-weight:500;width:100%;padding:0;">
+      </div>
+      <div style="display:flex;gap:5px;margin-bottom:6px;align-items:center;">
+        <span style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.08em;flex-shrink:0;">期別</span>
+        <div class="period-chip active" data-period="all" onclick="selectPeriod('all')">全部</div>
+        <div class="period-chip" data-period="初" onclick="selectPeriod('初')">初</div>
+        <div class="period-chip" data-period="中" onclick="selectPeriod('中')">中</div>
+        <div class="period-chip" data-period="末" onclick="selectPeriod('末')">末</div>
+        <button onclick="openPeriodConfig()" title="設定分界日期" style="margin-left:auto;display:flex;align-items:center;gap:4px;padding:3px 9px;border-radius:7px;border:1px solid var(--border);background:var(--input-bg);cursor:pointer;color:var(--text-muted);font-size:11px;font-weight:700;">
+          <i data-lucide="settings" style="width:11px;height:11px;"></i> 分界
+        </button>
+      </div>
+      <div style="display:flex;gap:5px;margin-bottom:7px;">
+        <div class="chip active" data-filter="all" onclick="setFilter('all')">全部</div>
+        <div class="chip" data-filter="none" onclick="setFilter('none')">未認領</div>
+        <div class="chip" data-filter="claimed" onclick="setFilter('claimed')">進行中</div>
+        <div class="chip" data-filter="done" onclick="setFilter('done')">已完工</div>
+      </div>
+      <div id="op-filter-list" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:7px;"></div>
+      <div style="display:flex;gap:12px;margin-bottom:4px;">
+        <span style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:var(--text-muted);"><span style="width:6px;height:6px;border-radius:50%;background:#ef4444;display:inline-block;"></span>未認領</span>
+        <span style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:var(--text-muted);"><span style="width:6px;height:6px;border-radius:50%;background:#f59e0b;display:inline-block;"></span>進行中</span>
+        <span style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:var(--text-muted);"><span style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block;"></span>已完工</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;padding:0 12px;border-bottom:1px solid var(--border);border-top:1px solid var(--border);flex-shrink:0;">
+      <div class="tab active" data-type="point" onclick="setTypeTab('point')">點位</div>
+      <div class="tab" data-type="img" onclick="setTypeTab('img')">PNG 底圖</div>
+      <button id="sort-btn" onclick="toggleSort()" style="padding:4px 6px;border:none;background:none;cursor:pointer;color:var(--accent);font-size:13px;font-weight:800;flex-shrink:0;line-height:1;">↑</button>
+      <button onclick="toggleTools()" style="padding:6px;border:none;background:none;cursor:pointer;color:var(--text-muted);margin-left:2px;flex-shrink:0;">
+        <i id="fold-icon" data-lucide="chevron-up" style="width:15px;height:15px;transition:transform .3s;"></i>
+      </button>
+    </div>
+    <div id="tools-wrap" style="max-height:280px;flex-shrink:0;" class="closed">
+      <div style="padding:10px 12px;display:grid;grid-template-columns:1fr 1fr;gap:7px;">
+        <button onclick="triggerFile('fi-json')" class="btn-accent" style="padding:10px;font-size:11px;border:none;">1. 匯入 JSON</button>
+        <button onclick="triggerFile('fi-png')" class="btn-accent" style="padding:10px;font-size:11px;border:none;">2. 上傳 PNG</button>
+        <!-- ★ 批次上傳：multiple -->
+        <button onclick="triggerFile('fi-geojson')" style="grid-column:span 2;padding:10px;font-size:12px;font-weight:700;background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--accent);border-radius:12px;cursor:pointer;">
+          匯入點位圖層 (GeoJSON · 可多選批次上傳)
+        </button>
+        <input type="file" id="fi-json" class="hidden" accept=".json">
+        <input type="file" id="fi-png" class="hidden" accept="image/png">
+        <!-- ★ multiple -->
+        <input type="file" id="fi-geojson" class="hidden" accept=".geojson,.json" multiple>
+      </div>
+      <!-- ★ 批次上傳進度 -->
+      <div id="batch-progress-wrap">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:11px;font-weight:700;color:var(--text-muted);" id="batch-label">上傳中…</span>
+          <span style="font-size:11px;font-weight:800;color:var(--accent);" id="batch-pct">0%</span>
+        </div>
+        <div class="batch-prog-track"><div class="batch-prog-fill" id="batch-fill" style="width:0%;"></div></div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:4px;" id="batch-detail"></div>
+      </div>
+      <div style="padding:8px 12px 12px;border-top:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+          <span style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.1em;">GLOBAL PROGRESS</span>
+          <span id="stat-percent" style="font-size:17px;font-weight:900;color:var(--accent);">0%</span>
+        </div>
+        <div class="prog-track"><div id="progress-bar" class="prog-fill" style="width:0%;background:linear-gradient(90deg,#6366f1,#10b981);"></div></div>
+      </div>
+    </div>
+    <div id="asset-list" style="flex:1;overflow-y:auto;padding:6px 10px;display:flex;flex-direction:column;gap:2px;"></div>
+    <div style="padding:8px 14px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+      <span style="font-size:10px;color:var(--border);font-weight:500;letter-spacing:.05em;">GIS Collaboration System</span>
+      <span style="font-size:10px;color:var(--border);font-weight:500;">produced by Hung</span>
+    </div>
+  </aside>
+
+  <main style="flex:1;position:relative;">
+    <div id="map"></div>
+    <div id="action-panel" style="display:none;">
+      <div style="margin-bottom:14px;">
+        <div style="font-size:9px;font-weight:700;color:var(--accent);letter-spacing:.12em;margin-bottom:3px;">SELECTED LAYER</div>
+        <h3 id="ui-name" style="font-size:17px;font-weight:900;color:var(--text);margin-bottom:7px;word-break:break-all;line-height:1.2;"></h3>
+        <div id="ui-badge"></div>
+      </div>
+      <div id="lock-notice" style="display:none;margin-bottom:10px;padding:9px 12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:10px;align-items:center;gap:7px;font-size:12px;font-weight:600;color:#f59e0b;">
+        <i data-lucide="lock" style="width:13px;height:13px;flex-shrink:0;"></i>
+        <span id="lock-msg"></span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:7px;">
+        <button id="btn-claim" class="btn-accent" style="padding:13px;font-size:14px;font-weight:800;border:none;">認領此區塊</button>
+        <button id="btn-done" class="btn-green" style="padding:13px;font-size:14px;font-weight:800;">標記已完工</button>
+        <div style="display:flex;gap:7px;">
+          <button id="btn-release" class="btn-ghost" style="flex:1;padding:9px;font-size:12px;">釋出</button>
+          <button onclick="closePanel()" class="btn-ghost" style="flex:1;padding:9px;font-size:12px;">關閉</button>
+        </div>
+      </div>
+      <div id="panel-memo-section">
+        <div class="pm-header">
+          <div class="pm-title">
+            <span>📝</span><span>備忘錄</span>
+            <span id="panel-memo-badge" style="display:none;background:#ef4444;color:#fff;border-radius:99px;padding:0 6px;font-size:10px;font-weight:800;"></span>
+          </div>
+          <button class="pm-add-btn" onclick="togglePanelMemoInput()"><span style="font-size:14px;line-height:1;">+</span> 新增</button>
+        </div>
+        <div id="panel-memo-input-wrap">
+          <textarea id="panel-memo-ta" rows="2" placeholder="輸入備忘…（Enter 送出）"></textarea>
+          <div class="pm-submit-row">
+            <button class="btn-accent" onclick="submitPanelMemo()" style="flex:1;padding:7px;font-size:12px;font-weight:700;border:none;border-radius:9px;">送出</button>
+            <button class="btn-ghost" onclick="togglePanelMemoInput()" style="flex:1;padding:7px;font-size:12px;border-radius:9px;">取消</button>
+          </div>
+        </div>
+        <div id="panel-memo-list" style="display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto;"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- 備忘錄面板 -->
+<div id="memo-panel">
+  <div style="padding:18px 18px 12px;border-bottom:1px solid var(--border);flex-shrink:0;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <div style="font-size:17px;font-weight:900;color:var(--text);">備忘錄</div>
+      <button onclick="toggleMemo()" class="btn-ghost" style="width:28px;height:28px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:8px;">✕</button>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);">多人共享備忘 · 即時同步 </div>
+  </div>
+  <div style="padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0;">
+    <div id="memo-op-hint" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;border-radius:9px;background:var(--surface2);border:1px solid var(--border);">
+      <span style="font-size:13px;">👤</span>
+      <span id="memo-op-name" style="font-size:12px;font-weight:700;color:var(--text-muted);">請先在右上角選擇里素隨</span>
+    </div>
+    <textarea id="memo-input" rows="3" placeholder="輸入備忘內容..." style="width:100%;padding:10px 12px;font-size:13px;resize:none;border-radius:10px;margin-bottom:8px;"></textarea>
+    <div style="display:flex;gap:7px;align-items:center;">
+      <select id="memo-asset-sel" style="flex:1;padding:7px 10px;font-size:12px;font-weight:600;border-radius:9px;cursor:pointer;">
+        <option value="">關聯圖層（選填）</option>
+      </select>
+      <button onclick="addMemo()" class="btn-accent" style="padding:7px 16px;font-size:12px;font-weight:700;border:none;flex-shrink:0;">新增</button>
+    </div>
+  </div>
+  <div id="memo-list" style="flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px;"></div>
+</div>
+
+<!-- 右鍵選單 -->
+<div id="ctx-menu" style="display:none;position:fixed;z-index:3000;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:6px;box-shadow:0 10px 40px rgba(0,0,0,0.3);min-width:220px;">
+  <div style="font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:.1em;padding:4px 10px 6px;">複製座標</div>
+  <button id="ctx-97" style="width:100%;text-align:left;padding:8px 12px;border:none;background:none;cursor:pointer;border-radius:8px;display:flex;flex-direction:column;gap:2px;" onmouseover="this.style.background='var(--accent-dim)'" onmouseout="this.style.background='none'">
+    <span style="font-size:10px;font-weight:700;color:var(--accent);">EPSG:3826 / 97 座標</span>
+    <span id="ctx-97-val" style="color:var(--text-sub);font-size:11px;font-weight:600;"></span>
+  </button>
+  <button id="ctx-wgs" style="width:100%;text-align:left;padding:8px 12px;border:none;background:none;cursor:pointer;border-radius:8px;display:flex;flex-direction:column;gap:2px;" onmouseover="this.style.background='var(--accent-dim)'" onmouseout="this.style.background='none'">
+    <span style="font-size:10px;font-weight:700;color:var(--green);">WGS84</span>
+    <span id="ctx-wgs-val" style="color:var(--text-sub);font-size:11px;font-weight:600;"></span>
+  </button>
+</div>
+
+<!-- 儲存 Modal -->
+<div id="modal-save" class="modal-bg" style="display:none;">
+  <div class="modal-box">
+    <h3 id="modal-title" style="font-size:19px;font-weight:900;color:var(--text);margin-bottom:4px;">儲存圖層</h3>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">建議名稱格式：MMDD…（例：0306北段）</p>
+    <input id="modal-name" type="text" style="width:100%;padding:11px 14px;font-size:15px;font-weight:700;text-align:center;margin-bottom:12px;" placeholder="輸入名稱...">
+    <div style="margin-bottom:12px;">
+      <div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.1em;margin-bottom:7px;">期別（可覆蓋自動分類）</div>
+      <div style="display:flex;gap:7px;">
+        <button class="period-select-btn" data-p="" onclick="selectModalPeriod('')" style="flex:1;padding:8px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:700;transition:all .2s;">自動</button>
+        <button class="period-select-btn" data-p="初" onclick="selectModalPeriod('初')" style="flex:1;padding:8px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:700;transition:all .2s;">初</button>
+        <button class="period-select-btn" data-p="中" onclick="selectModalPeriod('中')" style="flex:1;padding:8px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:700;transition:all .2s;">中</button>
+        <button class="period-select-btn" data-p="末" onclick="selectModalPeriod('末')" style="flex:1;padding:8px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:700;transition:all .2s;">末</button>
+      </div>
+    </div>
+    <div id="modal-status" style="display:none;padding:9px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:10px;color:#f59e0b;font-size:12px;font-weight:600;margin-bottom:10px;">上傳中...</div>
+    <button id="modal-confirm" onclick="doUpload()" class="btn-accent" style="width:100%;padding:13px;font-size:14px;font-weight:800;border:none;">確認儲存</button>
+    <button onclick="closeModal()" style="width:100%;margin-top:8px;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:12px;font-weight:600;">取消</button>
+  </div>
+</div>
+
+<!-- 分界設定 Modal -->
+<div id="modal-period-config" class="modal-bg" style="display:none;">
+  <div class="modal-box" style="max-width:380px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div><h3 style="font-size:18px;font-weight:900;color:var(--text);">初/中/末 分界設定</h3><p style="font-size:11px;color:var(--text-muted);">依 MMDD 日期自動分類 · 全員共用</p></div>
+      <button onclick="closePeriodConfig()" class="btn-ghost" style="width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:8px;">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div style="padding:12px;background:var(--surface2);border-radius:12px;border:1px solid var(--border);">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:8px;">初 的範圍：從月初 到</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:12px;color:var(--text-sub);">MMDD ≤</span>
+          <input id="cfg-early-end" type="text" maxlength="4" class="mmdd-input" placeholder="0305">
+          <span style="font-size:11px;color:var(--text-muted);">（含當天）</span>
+        </div>
+        <div id="cfg-early-preview" style="font-size:11px;color:var(--accent);margin-top:5px;font-weight:600;"></div>
+      </div>
+      <div style="padding:12px;background:var(--surface2);border-radius:12px;border:1px solid var(--border);">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:8px;">中 的範圍：初結束後 到</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:12px;color:var(--text-sub);">MMDD ≤</span>
+          <input id="cfg-mid-end" type="text" maxlength="4" class="mmdd-input" placeholder="0320">
+          <span style="font-size:11px;color:var(--text-muted);">（含當天）</span>
+        </div>
+        <div id="cfg-mid-preview" style="font-size:11px;color:var(--accent);margin-top:5px;font-weight:600;"></div>
+      </div>
+      <div style="padding:12px;background:var(--surface2);border-radius:12px;border:1px solid var(--border);">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:4px;">末 的範圍：中結束後 以後</div>
+        <div id="cfg-late-preview" style="font-size:11px;color:var(--accent);margin-top:4px;font-weight:600;"></div>
+      </div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;">
+      <button onclick="applyPeriodConfig()" class="btn-accent" style="flex:1;padding:11px;font-size:13px;font-weight:800;border:none;">套用並儲存</button>
+      <button onclick="closePeriodConfig()" class="btn-ghost" style="flex:1;padding:11px;font-size:13px;">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 團隊進度 Modal -->
+<div id="modal-stats" class="modal-bg" style="display:none;">
+  <div class="modal-box" style="max-width:620px;max-height:92vh;display:flex;flex-direction:column;padding:0;overflow:hidden;">
+    <div style="padding:20px 24px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="font-size:19px;font-weight:900;color:var(--text);letter-spacing:-.02em;">團隊進度</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">即時完工狀況 </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="exportXlsx()" style="display:flex;align-items:center;gap:5px;padding:7px 13px;border-radius:9px;border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.1);color:#10b981;cursor:pointer;font-size:12px;font-weight:700;">📊 匯出 Excel</button>
+        <button onclick="closeStats()" class="btn-ghost" style="width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:8px;">✕</button>
+      </div>
+    </div>
+    <!-- ★ 期別 Tab 移到圓餅圖上方，讓圖表跟著變 -->
+    <div style="padding:0 24px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:0;">
+      <button class="stats-period-tab active" data-sp="all" onclick="setStatsPeriod('all')" style="padding:10px 16px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;color:var(--accent);border-bottom:2px solid var(--accent);">全部</button>
+      <button class="stats-period-tab" data-sp="初" onclick="setStatsPeriod('初')" style="padding:10px 16px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;">初期</button>
+      <button class="stats-period-tab" data-sp="中" onclick="setStatsPeriod('中')" style="padding:10px 16px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;">中期</button>
+      <button class="stats-period-tab" data-sp="末" onclick="setStatsPeriod('末')" style="padding:10px 16px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;color:var(--text-muted);border-bottom:2px solid transparent;">末期</button>
+    </div>
+    <!-- ★ 圓餅 + 數字依 statsPeriod 渲染 -->
+    <div style="padding:16px 24px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <div style="display:flex;gap:14px;align-items:center;">
+        <div class="donut-wrap" style="flex-shrink:0;">
+          <canvas id="donut-canvas" width="120" height="120"></canvas>
+          <div class="donut-center">
+            <div id="donut-pct" style="font-size:22px;font-weight:900;color:var(--accent);line-height:1;">0%</div>
+            <div style="font-size:9px;color:var(--text-muted);font-weight:600;letter-spacing:.08em;">完工率</div>
+          </div>
+        </div>
+        <div style="flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+          <div style="padding:12px 14px;border-radius:14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.18);text-align:center;">
+            <div id="s-done" style="font-size:28px;font-weight:900;color:#10b981;line-height:1;">0</div>
+            <div style="font-size:10px;font-weight:700;color:#10b981;margin-top:4px;letter-spacing:.06em;">已完工</div>
+          </div>
+          <div style="padding:12px 14px;border-radius:14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.18);text-align:center;">
+            <div id="s-claimed" style="font-size:28px;font-weight:900;color:#f59e0b;line-height:1;">0</div>
+            <div style="font-size:10px;font-weight:700;color:#f59e0b;margin-top:4px;letter-spacing:.06em;">進行中</div>
+          </div>
+          <div style="padding:12px 14px;border-radius:14px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.18);text-align:center;">
+            <div id="s-none" style="font-size:28px;font-weight:900;color:#ef4444;line-height:1;">0</div>
+            <div style="font-size:10px;font-weight:700;color:#ef4444;margin-top:4px;letter-spacing:.06em;">未認領</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+          <span style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.1em;">OVERALL PROGRESS</span>
+          <span id="stats-total-label" style="font-size:10px;font-weight:600;color:var(--text-muted);">0 個圖層</span>
+        </div>
+        <div style="height:8px;border-radius:99px;background:var(--border);overflow:hidden;display:flex;">
+          <div id="stats-bar-done" style="height:100%;background:#10b981;transition:width .6s cubic-bezier(.16,1,.3,1);width:0%;"></div>
+          <div id="stats-bar-claimed" style="height:100%;background:#f59e0b;transition:width .6s cubic-bezier(.16,1,.3,1);width:0%;"></div>
+        </div>
+      </div>
+    </div>
+    <div id="stats-op-list" style="flex:1;overflow-y:auto;padding:14px 24px;display:flex;flex-direction:column;gap:10px;"></div>
+    <div style="padding:12px 24px;border-top:1px solid var(--border);flex-shrink:0;">
+      <button onclick="closeStats()" class="btn-ghost" style="width:100%;padding:10px;font-size:13px;border-radius:12px;">關閉</button>
+    </div>
+  </div>
+</div>
+
+<!-- 操作紀錄 Modal -->
+<div id="modal-audit" class="modal-bg" style="display:none;">
+  <div class="modal-box" style="max-width:560px;max-height:86vh;display:flex;flex-direction:column;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-shrink:0;">
+      <div><h3 style="font-size:19px;font-weight:900;color:var(--text);">操作紀錄</h3><p style="font-size:11px;color:var(--text-muted);">所有圖層操作歷史</p></div>
+      <button onclick="closeAudit()" class="btn-ghost" style="width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:8px;">✕</button>
+    </div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;flex-shrink:0;">
+      <div class="chip active" data-afilter="all" onclick="setAuditFilter('all')">全部</div>
+      <div class="chip" data-afilter="claimed" onclick="setAuditFilter('claimed')">認領</div>
+      <div class="chip" data-afilter="done" onclick="setAuditFilter('done')">完工</div>
+      <div class="chip" data-afilter="released" onclick="setAuditFilter('released')">釋出</div>
+      <div class="chip" data-afilter="renamed" onclick="setAuditFilter('renamed')">改名</div>
+      <div class="chip" data-afilter="created" onclick="setAuditFilter('created')">新增</div>
+      <div class="chip" data-afilter="deleted" onclick="setAuditFilter('deleted')">刪除</div>
+    </div>
+    <div id="audit-list" style="flex:1;overflow-y:auto;"></div>
+    <button onclick="closeAudit()" class="btn-ghost" style="width:100%;margin-top:12px;padding:11px;font-size:13px;border-radius:12px;flex-shrink:0;">關閉</button>
+  </div>
+</div>
+
+<!-- 說明 Modal -->
+<div id="modal-help" class="modal-bg" style="display:none;">
+  <div class="modal-box" style="max-width:520px;max-height:88vh;overflow-y:auto;padding:24px 26px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
+      <div>
+        <div style="font-size:20px;font-weight:900;color:var(--text);">系統使用說明</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">花蓮人行道圖資協作系統 · v5</div>
+      </div>
+      <button onclick="closeHelp()" class="btn-ghost" style="width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:8px;">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <div class="help-section" style="background:var(--accent-dim);border:1px solid var(--accent-border);">
+        <div class="help-section-title" style="color:var(--accent);">🚀 01 · 基本作業流程</div>
+        <div class="help-section-body">
+          <p>① 右上角選擇作業員 ② 點選地圖圖層 ③ 認領 ④ 完工後標記 ⑤ 需要時釋出</p>
+        </div>
+      </div>
+      <div class="help-section" style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);">
+        <div class="help-section-title" style="color:#a5b4fc;">📦 02 · 批次上傳點位圖層</div>
+        <div class="help-section-body">
+          <p>點擊「匯入點位圖層」可一次選擇多個 GeoJSON 檔案，系統會依序上傳並顯示進度條。</p>
+          <p>上傳完成後各圖層自動出現在列表中，名稱取自檔案名稱（去除副檔名）。</p>
+        </div>
+      </div>
+      <div class="help-section" style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);">
+        <div class="help-section-title" style="color:#fbbf24;">🏷️ 03 · 列表快速改期別</div>
+        <div class="help-section-body">
+          <p>每張圖層卡片左側有一個期別標籤（初 / 中 / 末 / 自動），點擊後出現快選選單，可直接切換，無需進入彈窗。</p>
+        </div>
+      </div>
+      <div class="help-section" style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);">
+        <div class="help-section-title" style="color:#34d399;">📝 04 · 備忘錄</div>
+        <div class="help-section-body">
+          <p>● 必須先選作業員才能新增備忘或留言</p>
+          <p>● ☑️ 標記已解決後不計入 Header 數量</p>
+          <p>● 認領小框框內可直接查看 / 新增此圖層的備忘</p>
+        </div>
+      </div>
+    </div>
+    <button onclick="closeHelp()" class="btn-ghost" style="width:100%;margin-top:16px;padding:11px;font-size:13px;border-radius:12px;">關閉</button>
+  </div>
+</div>
+
+<!-- 作業員管理 Modal -->
+<div id="modal-op" class="modal-bg" style="display:none;">
+  <div class="modal-box" style="max-height:80vh;display:flex;flex-direction:column;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-shrink:0;">
+      <h3 style="font-size:18px;font-weight:900;color:var(--text);">人員管理</h3>
+      <button onclick="closeOpManager()" class="btn-ghost" style="width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:8px;">✕</button>
+    </div>
+    <div style="display:flex;gap:7px;margin-bottom:10px;flex-shrink:0;">
+      <input id="new-op-name" type="text" style="flex:1;padding:9px 13px;font-size:14px;font-weight:600;" placeholder="新作業員姓名">
+      <button onclick="addOperator()" class="btn-accent" style="padding:9px 16px;font-size:13px;font-weight:700;border:none;">新增</button>
+    </div>
+    <div id="op-list" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:5px;"></div>
+    <button onclick="closeOpManager()" class="btn-ghost" style="width:100%;margin-top:14px;padding:11px;font-size:13px;border-radius:12px;flex-shrink:0;">關閉</button>
+  </div>
+</div>
+
+<script>
+const SUPA_URL="https://uxcewvrsipqoeinbdhtw.supabase.co";
+const SUPA_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV4Y2V3dnJzaXBxb2VpbmJkaHR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NTM3OTQsImV4cCI6MjA4ODEyOTc5NH0.leM7osk_YK-ypDpF1cM-G5Kriq3pAUI6-8PS_jcwJXg";
+proj4.defs("EPSG:3826","+proj=tmerc +lat_0=0 +lon_0=121 +k=0.9999 +x_0=250000 +y_0=0 +ellps=GRS80 +units=m +no_defs");
+
+let sb,map,tileLayer;
+let assets=new Map(),operators=[];
+let activeId=null,curFilter='all',curTab='point',curOp='all';
+let pendingJson=null,pendingImg=null,pendingPoints=null,editId=null;
+let isDark=true,sortOrder='asc';
+let locateMarker=null,_ctxCoord=null;
+let collapsedGroups=new Map();
+let activePeriod='all';
+let pendingManualPeriod='';
+let memoOpen=false,memos=[],editingMemoId=null;
+let memoComments={},expandedComments=new Set();
+let periodCfg={earlyEnd:'0305',midEnd:'0320'};
+let statsPeriod='all';
+// 追蹤目前開啟的 period popover
+let _openPopoverId=null;
+const canvasRenderer=L.canvas({padding:0.5});
+
+// ── 工具 ──
+function to84(e,n){return proj4('EPSG:3826','WGS84',[e,n]);}
+function to3826(lng,lat){return proj4('WGS84','EPSG:3826',[lng,lat]);}
+function sColor(s){return s==='done'?'#10b981':s==='claimed'?'#f59e0b':'#ef4444';}
+function looksWGS84(x,y){return x>=119&&x<=123&&y>=21&&y<=26;}
+function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function highlight(text,kw){if(!kw)return text;const idx=text.toLowerCase().indexOf(kw.toLowerCase());if(idx<0)return text;return text.slice(0,idx)+'<span class="hl">'+text.slice(idx,idx+kw.length)+'</span>'+text.slice(idx+kw.length);}
+function getMMDD(name){const m=name&&name.match(/^(\d{4})/);return m?m[1]:null;}
+function getMonth(name){const m=name&&name.match(/^(\d{2})/);return m?m[1]:null;}
+function autoPeriod(name){const mmdd=getMMDD(name);if(!mmdd)return null;if(mmdd<=periodCfg.earlyEnd)return '初';if(mmdd<=periodCfg.midEnd)return '中';return '末';}
+function effectivePeriod(asset){return asset.manual_period||autoPeriod(asset.name)||'其他';}
+function monthLabel(mm){return parseInt(mm,10)+'月';}
+function dayLabel(mmdd){return parseInt(mmdd.slice(0,2),10)+'月'+parseInt(mmdd.slice(2),10)+'日';}
+function isDayDefaultCollapsed(){return curFilter==='all'&&curOp==='all';}
+function isCollapsed(key,def=false){return collapsedGroups.has(key)?collapsedGroups.get(key):def;}
+function toggleCollapse(key,def=false){collapsedGroups.set(key,!isCollapsed(key,def));renderList();}
+
+// ── 期別篩選 ──
+function selectPeriod(p){
+  activePeriod=p;
+  document.querySelectorAll('.period-chip').forEach(c=>c.classList.toggle('active',c.dataset.period===p));
+  for(const k of [...collapsedGroups.keys()]){if(k.startsWith('d:'))collapsedGroups.delete(k);}
+  refreshAll();
+}
+
+// ── 分界設定 ──
+async function loadPeriodCfg(){try{const{data}=await sb.from('app_settings').select('value').eq('key','period_config').maybeSingle();if(data?.value)periodCfg=data.value;}catch(e){}}
+async function savePeriodCfg(){await sb.from('app_settings').upsert({key:'period_config',value:periodCfg,updated_at:new Date().toISOString()},{onConflict:'key'});}
+function openPeriodConfig(){document.getElementById('cfg-early-end').value=periodCfg.earlyEnd;document.getElementById('cfg-mid-end').value=periodCfg.midEnd;updateCfgPreview();document.getElementById('modal-period-config').style.display='flex';['cfg-early-end','cfg-mid-end'].forEach(id=>document.getElementById(id).oninput=updateCfgPreview);}
+function closePeriodConfig(){document.getElementById('modal-period-config').style.display='none';}
+function updateCfgPreview(){const e=document.getElementById('cfg-early-end').value.trim().padStart(4,'0');const m=document.getElementById('cfg-mid-end').value.trim().padStart(4,'0');const fmt=v=>`${parseInt(v.slice(0,2))}月${parseInt(v.slice(2))}日`;document.getElementById('cfg-early-preview').innerText=`→ 月初 ～ ${fmt(e)}`;document.getElementById('cfg-mid-preview').innerText=`→ ${fmt(e)} 之後 ～ ${fmt(m)}`;document.getElementById('cfg-late-preview').innerText=`→ ${fmt(m)} 之後 至月底`;}
+function applyPeriodConfig(){const e=document.getElementById('cfg-early-end').value.trim();const m=document.getElementById('cfg-mid-end').value.trim();if(!/^\d{4}$/.test(e)||!/^\d{4}$/.test(m)){toast('請輸入4位數字','error');return;}if(e>=m){toast('初的結尾必須早於中的結尾','error');return;}periodCfg={earlyEnd:e,midEnd:m};savePeriodCfg().then(()=>toast('分界已儲存','success'));closePeriodConfig();renderList();}
+function selectModalPeriod(p){pendingManualPeriod=p;document.querySelectorAll('.period-select-btn').forEach(btn=>{const a=btn.dataset.p===p;btn.style.background=a?'var(--accent-dim)':'var(--input-bg)';btn.style.borderColor=a?'var(--accent)':'var(--border)';btn.style.color=a?'var(--accent)':'var(--text-muted)';});}
+
+// ★ ── 列表快速改期別（inline popover）──
+function closeAllPopovers(){
+  document.querySelectorAll('.period-popover').forEach(p=>p.remove());
+  _openPopoverId=null;
+}
+function togglePeriodPopover(e,assetId){
+  e.stopPropagation();
+  if(_openPopoverId===assetId){closeAllPopovers();return;}
+  closeAllPopovers();
+  _openPopoverId=assetId;
+  const btn=e.currentTarget;
+  const asset=assets.get(assetId);
+  const cur=asset?.manual_period||'';
+  const popover=document.createElement('div');
+  popover.className='period-popover';
+  const opts=[{label:'自動',val:''},{label:'初',val:'初'},{label:'中',val:'中'},{label:'末',val:'末'}];
+  opts.forEach(opt=>{
+    const b=document.createElement('button');
+    b.textContent=opt.label;
+    if(cur===opt.val)b.classList.add('active');
+    b.onclick=async(ev)=>{
+      ev.stopPropagation();
+      await setAssetPeriod(assetId,opt.val);
+      closeAllPopovers();
+    };
+    popover.appendChild(b);
+  });
+  btn.appendChild(popover);
+  // 點外面關閉
+  setTimeout(()=>document.addEventListener('click',closeAllPopovers,{once:true}),0);
+}
+
+async function setAssetPeriod(assetId,period){
+  const asset=assets.get(assetId);if(!asset)return;
+  const uName=document.getElementById('user-select').value;
+  await sb.from('assets').update({manual_period:period||null}).eq('id',assetId);
+  await writeAudit(assetId,asset.display_name,'renamed',uName,asset.manual_period||'auto',period||'auto');
+  // local update (RT will also fire)
+  asset.manual_period=period||'';
+  toast(period?`已設為「${period}」期`:'已恢復自動分類','success');
+  refreshAll();
+}
+
+// ── Map ──
+const NLSC_URL='https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}';
+const NLSC_DARK='https://wmts.nlsc.gov.tw/wmts/EMAP5/default/GoogleMapsCompatible/{z}/{y}/{x}';
+const BLANK='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJgCC==';
+function buildTile(dark){return L.tileLayer(dark?NLSC_DARK:NLSC_URL,{maxZoom:19,tileSize:256,crossOrigin:true,errorTileUrl:BLANK,attribution:'© 國土測繪中心'});}
+function toggleTheme(){isDark=!isDark;document.documentElement.setAttribute('data-theme',isDark?'':'light');document.getElementById('theme-icon').setAttribute('data-lucide',isDark?'moon':'sun');if(tileLayer)map.removeLayer(tileLayer);tileLayer=buildTile(isDark).addTo(map);lucide.createIcons();}
+function setOnline(on){const dot=document.getElementById('db-dot'),lbl=document.getElementById('db-label');dot.style.background=on?'#10b981':'#ef4444';dot.classList.toggle('live',on);lbl.innerText=on?'LIVE':'OFFLINE';lbl.style.color=on?'#10b981':'#ef4444';}
+function toast(msg,type='info'){const el=document.getElementById('toast');const c={info:'#6366f1',success:'#10b981',warn:'#f59e0b',error:'#ef4444'};el.style.borderLeftColor=c[type]||c.info;el.innerText=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2800);}
+
+function locateCoord(){
+  const raw=document.getElementById('locate-input').value.trim();if(!raw)return;
+  const parts=raw.split(/[,，\s]+/).map(s=>s.trim()).filter(Boolean);
+  if(parts.length<2){toast('格式錯誤','error');return;}
+  const e=parseFloat(parts[0]),n=parseFloat(parts[1]);
+  if(isNaN(e)||isNaN(n)){toast('數值解析失敗','error');return;}
+  const[lng,lat]=to84(e,n);
+  if(lat<20||lat>30||lng<118||lng>126){toast('座標超出範圍','warn');return;}
+  if(locateMarker){map.removeLayer(locateMarker);locateMarker=null;}
+  const icon=L.divIcon({className:'',html:`<div style="width:18px;height:18px;border-radius:50%;background:#6366f1;border:3px solid #fff;animation:pulse-ring 1.4s ease-out infinite;"></div><style>@keyframes pulse-ring{0%{box-shadow:0 0 0 0 rgba(99,102,241,.6)}70%{box-shadow:0 0 0 14px rgba(99,102,241,0)}100%{box-shadow:0 0 0 0 rgba(99,102,241,0)}}</style>`,iconSize:[18,18],iconAnchor:[9,9]});
+  locateMarker=L.marker([lat,lng],{icon}).addTo(map).bindPopup(`<b>📍 97 定位</b><br>E ${e.toFixed(2)}, N ${n.toFixed(2)}`,{maxWidth:220}).openPopup();
+  locateMarker.on('click',()=>{map.removeLayer(locateMarker);locateMarker=null;});
+  map.flyTo([lat,lng],17,{animate:true,duration:1.2});
+  toast(`已定位 E${Math.round(e)}, N${Math.round(n)}`,'success');
+}
+function copyCoord(type){
+  const c=_ctxCoord;if(!c)return;
+  const text=type==='97'?`E ${c.east.toFixed(3)}, N ${c.north.toFixed(3)}`:`${c.lat.toFixed(6)}, ${c.lng.toFixed(6)}`;
+  const ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;top:0;left:0;opacity:0;';document.body.appendChild(ta);ta.focus();ta.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){}document.body.removeChild(ta);
+  document.getElementById('ctx-menu').style.display='none';
+  toast(ok?`已複製：${text}`:`複製失敗：${text}`,ok?'success':'warn');
+}
+
+// ── Audit ──
+async function writeAudit(assetId,assetName,action,opName,oldVal,newVal){try{await sb.from('audit_log').insert({asset_id:assetId||null,asset_name:assetName,action,operator_name:opName||null,old_value:oldVal||null,new_value:newVal||null});}catch(e){}}
+let auditData=[],auditFilter='all';
+const ACTION_LABEL={claimed:{text:'認領',color:'#f59e0b',icon:'👷'},done:{text:'完工',color:'#10b981',icon:'✅'},released:{text:'釋出',color:'#64748b',icon:'🔓'},renamed:{text:'改名',color:'#6366f1',icon:'✏️'},created:{text:'新增',color:'#8b5cf6',icon:'📁'},deleted:{text:'刪除',color:'#ef4444',icon:'🗑️'}};
+async function openAudit(){document.getElementById('modal-audit').style.display='flex';document.getElementById('audit-list').innerHTML='<div style="text-align:center;padding:24px;color:var(--text-muted);">載入中...</div>';const{data,error}=await sb.from('audit_log').select('*').order('created_at',{ascending:false});if(error){document.getElementById('audit-list').innerHTML='<div style="color:#ef4444;padding:12px;">載入失敗</div>';return;}auditData=data||[];renderAudit();}
+function closeAudit(){document.getElementById('modal-audit').style.display='none';}
+function setAuditFilter(f){auditFilter=f;document.querySelectorAll('.chip[data-afilter]').forEach(c=>c.classList.toggle('active',c.dataset.afilter===f));renderAudit();}
+function renderAudit(){
+  const list=document.getElementById('audit-list');
+  const filtered=auditFilter==='all'?auditData:auditData.filter(r=>r.action===auditFilter);
+  if(!filtered.length){list.innerHTML='<div style="text-align:center;padding:32px;color:var(--text-muted);">暫無紀錄</div>';return;}
+  const groups={};filtered.forEach(r=>{const d=new Date(r.created_at);const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;if(!groups[key])groups[key]={label:`${d.getFullYear()} 年 ${d.getMonth()+1} 月`,rows:[]};groups[key].rows.push(r);});
+  const frag=document.createDocumentFragment();
+  Object.keys(groups).sort((a,b)=>b.localeCompare(a)).forEach(key=>{
+    const g=groups[key];const hdr=document.createElement('div');hdr.style.cssText='font-size:10px;font-weight:800;color:var(--text-muted);letter-spacing:.12em;padding:10px 4px 6px;border-bottom:1px solid var(--border);margin-bottom:2px;';hdr.innerText=g.label;frag.appendChild(hdr);
+    g.rows.forEach(r=>{const al=ACTION_LABEL[r.action]||{text:r.action,color:'#64748b',icon:'•'};const d=new Date(r.created_at);const ts=`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;let sub=r.action==='renamed'?`${r.old_value} → ${r.new_value}`:r.operator_name||'';const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);';row.innerHTML=`<div style="font-size:15px;flex-shrink:0;width:20px;text-align:center;">${al.icon}</div><div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;"><span style="font-size:11px;font-weight:800;color:${al.color};">${al.text}</span><span style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px;">${r.asset_name}</span></div>${sub?`<div style="font-size:11px;color:var(--text-muted);margin-top:1px;">${sub}</div>`:''}</div><div style="font-size:10px;font-weight:600;color:var(--text-muted);flex-shrink:0;white-space:nowrap;">${ts}</div>`;frag.appendChild(row);});
+  });
+  list.innerHTML='';list.appendChild(frag);
+}
+
+// ── 統計 ──
+// ★ 依 statsPeriod 過濾後計算 done/claimed/none
+function calcStatsByPeriod(period){
+  let done=0,claimed=0,none=0;
+  assets.forEach(a=>{
+    const p=effectivePeriod(a);
+    if(period!=='all'&&p!==period)return;
+    const st=a.statusData?.status||'none';
+    if(st==='done')done++;else if(st==='claimed')claimed++;else none++;
+  });
+  return{done,claimed,none,total:done+claimed+none};
+}
+
+function setStatsPeriod(p){
+  statsPeriod=p;
+  document.querySelectorAll('.stats-period-tab').forEach(t=>{const a=t.dataset.sp===p;t.style.color=a?'var(--accent)':'var(--text-muted)';t.style.borderBottomColor=a?'var(--accent)':'transparent';});
+  // ★ 重新渲染圓餅 + 數字 + 作業員列表
+  refreshStatsPanel();
+}
+
+// ★ 抽出共用的圓餅 + 統計數字更新函式
+function refreshStatsPanel(){
+  const{done,claimed,none,total}=calcStatsByPeriod(statsPeriod);
+  const p=total?Math.round(done/total*100):0;
+  document.getElementById('donut-pct').innerText=p+'%';
+  document.getElementById('s-done').innerText=done;
+  document.getElementById('s-claimed').innerText=claimed;
+  document.getElementById('s-none').innerText=none;
+  document.getElementById('stats-total-label').innerText=`${total} 個圖層`;
+  document.getElementById('stats-bar-done').style.width=(total?done/total*100:0)+'%';
+  document.getElementById('stats-bar-claimed').style.width=(total?claimed/total*100:0)+'%';
+  drawDonut(done,claimed,none);
+  renderStatsOpList();
+}
+
+function drawDonut(done,claimed,none){
+  const canvas=document.getElementById('donut-canvas');const ctx=canvas.getContext('2d');
+  const cx=60,cy=60,r=50,lw=13,total=done+claimed+none||1;
+  ctx.clearRect(0,0,120,120);let start=-Math.PI/2;
+  [{val:done,color:'#10b981'},{val:claimed,color:'#f59e0b'},{val:none,color:'#ef4444'}].forEach(s=>{if(!s.val)return;const sw=2*Math.PI*(s.val/total);ctx.beginPath();ctx.arc(cx,cy,r,start,start+sw);ctx.lineWidth=lw;ctx.strokeStyle=s.color;ctx.lineCap='round';ctx.stroke();start+=sw;});
+  if(!done&&!claimed&&!none){ctx.beginPath();ctx.arc(cx,cy,r,-Math.PI/2,Math.PI*1.5);ctx.lineWidth=lw;ctx.strokeStyle='rgba(100,100,100,.15)';ctx.stroke();}
+}
+
+function renderStatsOpList(){
+  const el=document.getElementById('stats-op-list');el.innerHTML='';
+  const opD={},opC={},opN={};
+  assets.forEach(a=>{
+    const period=effectivePeriod(a);if(statsPeriod!=='all'&&period!==statsPeriod)return;
+    const st=a.statusData?.status||'none',op=a.statusData?.operator_name;
+    if(op){if(st==='done')opD[op]=(opD[op]||0)+1;else if(st==='claimed')opC[op]=(opC[op]||0)+1;else opN[op]=(opN[op]||0)+1;}
+  });
+  const allOps=[...new Set([...operators.map(o=>o.name),...Object.keys(opD),...Object.keys(opC)])];
+  allOps.sort((a,b)=>{const ta=(opD[a]||0)+(opC[a]||0)+(opN[a]||0);const tb=(opD[b]||0)+(opC[b]||0)+(opN[b]||0);return tb-ta;}).forEach(name=>{
+    const d=opD[name]||0,c=opC[name]||0,n=opN[name]||0,t=d+c+n;if(!t)return;
+    const pct=Math.round(d/t*100);
+    const card=document.createElement('div');card.style.cssText='padding:14px 16px;background:var(--card-bg);border:1px solid var(--border);border-radius:14px;transition:border-color .15s;';
+    card.onmouseenter=()=>card.style.borderColor='var(--accent-border)';card.onmouseleave=()=>card.style.borderColor='var(--border)';
+    card.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="display:flex;align-items:center;gap:9px;"><div style="width:32px;height:32px;border-radius:50%;background:var(--accent-dim);border:1px solid var(--accent-border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:var(--accent);">${name.slice(0,1)}</div><span style="font-weight:800;font-size:14px;color:var(--text);">${name}</span></div><div style="text-align:right;"><div style="font-size:20px;font-weight:900;color:${pct>=100?'#10b981':'var(--accent)'};">${pct}%</div><div style="font-size:10px;color:var(--text-muted);font-weight:600;">${t} 個圖層</div></div></div><div style="height:7px;border-radius:99px;background:var(--border);overflow:hidden;display:flex;margin-bottom:9px;"><div style="width:${Math.round(d/t*100)}%;background:#10b981;transition:width .6s;"></div><div style="width:${Math.round(c/t*100)}%;background:#f59e0b;transition:width .6s;"></div></div><div style="display:flex;gap:14px;"><span style="font-size:11px;font-weight:700;color:#10b981;">✅ 完工 ${d}</span><span style="font-size:11px;font-weight:700;color:#f59e0b;">⏳ 進行中 ${c}</span><span style="font-size:11px;color:var(--text-muted);">🔴 待處理 ${n}</span></div>`;
+    el.appendChild(card);
+  });
+  if(!el.children.length)el.innerHTML='<div style="text-align:center;padding:32px;color:var(--text-muted);">此期別暫無作業紀錄</div>';
+}
+
+function openStats(){
+  statsPeriod='all';
+  document.getElementById('modal-stats').style.display='flex';
+  document.querySelectorAll('.stats-period-tab').forEach(t=>{const a=t.dataset.sp==='all';t.style.color=a?'var(--accent)':'var(--text-muted)';t.style.borderBottomColor=a?'var(--accent)':'transparent';});
+  refreshStatsPanel();
+}
+function closeStats(){document.getElementById('modal-stats').style.display='none';}
+
+function exportXlsx(){
+  const rows=[['圖層名稱','類型','期別','狀態','作業員','最後更新']];
+  const stL={'done':'已完工','claimed':'進行中','none':'待處理'},tL={'img':'PNG底圖','point':'點位圖層'};
+  [...assets.values()].sort((a,b)=>a.name.localeCompare(b.name,'zh-TW')).forEach(a=>{const s=a.statusData;rows.push([a.display_name,tL[a.type]||a.type,effectivePeriod(a),stL[s?.status||'none'],s?.operator_name||'',s?.updated_at?new Date(s.updated_at).toLocaleString('zh-TW'):'']);});
+  const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:40},{wch:10},{wch:5},{wch:10},{wch:12},{wch:20}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'進度總覽');
+  XLSX.writeFile(wb,`花蓮人行道進度_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('Excel 已匯出','success');
+}
+function downloadCSV(assetId){
+  const a=assets.get(assetId);if(!a||a.type!=='point'){toast('找不到圖層','error');return;}
+  const raw=a._rawFeatures;if(!raw?.length){toast('無點位資料','warn');return;}
+  const esc=v=>{const s=String(v??'');return s.includes(',')||s.includes('\n')?`"${s.replace(/"/g,'""')}"`  :s;};
+  const rows=['點名,東坐標,北坐標,高程'];
+  raw.forEach(f=>{const p=getStdProps(f.properties||{});rows.push([esc(p.POINT_NAME),esc(p.EAST),esc(p.NORTH),esc(p.ELEV)].join(','));});
+  const blob=new Blob(['\uFEFF'+rows.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`${a.display_name}.csv`;document.body.appendChild(link);link.click();document.body.removeChild(link);URL.revokeObjectURL(url);
+  toast(`已匯出 ${rows.length-1} 筆`,'success');
+}
+function isFieldFmt(props){return props&&Object.keys(props).some(k=>/^field_\d+$/.test(k));}
+function getStdProps(props){if(!props)return{};if(isFieldFmt(props))return{POINT_NAME:String(props['field_1']??''),EAST:props['field_7']??'',NORTH:props['field_6']??'',ELEV:props['field_8']??''};return{POINT_NAME:String(props['點名']??props['name']??props['NAME']??''),EAST:props['東坐標']??props['東座標']??'',NORTH:props['北坐標']??props['北座標']??'',ELEV:props['高程']??''};}
+
+// ══════════════════════════════════════════════
+// ── 備忘錄（全域面板）──
+// ══════════════════════════════════════════════
+function syncMemoOpHint(){
+  const name=document.getElementById('user-select').value;
+  const hint=document.getElementById('memo-op-name');
+  if(!hint)return;
+  hint.textContent=name?name:'請先在右上角選擇里素隨';
+  hint.style.color=name?'var(--accent)':'var(--text-muted)';
+}
+function toggleMemo(){
+  memoOpen=!memoOpen;
+  document.getElementById('memo-panel').classList.toggle('open',memoOpen);
+  if(memoOpen){syncMemoOpHint();loadMemos();}
+}
+async function loadMemos(){
+  const[mRes,cRes]=await Promise.all([
+    sb.from('memos').select('*').order('pinned',{ascending:false}).order('created_at',{ascending:false}),
+    sb.from('memo_comments').select('*').order('created_at',{ascending:true})
+  ]);
+  memos=mRes.data||[];
+  memoComments={};
+  (cRes.data||[]).forEach(c=>{if(!memoComments[c.memo_id])memoComments[c.memo_id]=[];memoComments[c.memo_id].push(c);});
+  renderMemos();
+  updateMemoCount();
+  if(activeId)renderPanelMemos(activeId);
+  const sel=document.getElementById('memo-asset-sel');
+  sel.innerHTML='<option value="">關聯圖層（選填）</option>';
+  [...assets.entries()].sort((a,b)=>a[1].name.localeCompare(b[1].name,'zh-TW')).forEach(([id,a])=>{const o=document.createElement('option');o.value=id;o.innerText=a.name;sel.appendChild(o);});
+}
+
+function renderPanelMemos(assetId){
+  const list=document.getElementById('panel-memo-list');
+  const badge=document.getElementById('panel-memo-badge');
+  if(!list)return;
+  const linked=memos.filter(m=>m.asset_id===assetId);
+  const unresolved=linked.filter(m=>!m.resolved);
+  if(unresolved.length){badge.style.display='inline';badge.textContent=unresolved.length;}
+  else badge.style.display='none';
+  if(!linked.length){list.innerHTML='<div id="panel-memo-empty">此圖層尚無備忘 · 點擊「+ 新增」快速記錄</div>';return;}
+  list.innerHTML='';
+  linked.forEach(m=>{
+    const d=new Date(m.created_at);
+    const ts=`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const commentCount=(memoComments[m.id]||[]).length;
+    const dotColor=m.resolved?'#10b981':'#f59e0b';
+    const row=document.createElement('div');
+    row.className='pm-memo-row'+(m.resolved?' resolved':'');
+    row.title='點擊開啟備忘錄面板';
+    row.onclick=()=>{
+      if(!memoOpen){memoOpen=true;document.getElementById('memo-panel').classList.add('open');syncMemoOpHint();}
+      if(!memos.length)loadMemos();else renderMemos();
+      setTimeout(()=>{const cards=document.querySelectorAll('#memo-list .memo-card');const idx=memos.findIndex(x=>x.id===m.id);if(idx>=0&&cards[idx]){cards[idx].scrollIntoView({behavior:'smooth',block:'center'});cards[idx].style.transition='box-shadow .2s';cards[idx].style.boxShadow='0 0 0 2px var(--accent)';setTimeout(()=>{if(cards[idx])cards[idx].style.boxShadow='';},1400);}},320);
+    };
+    row.innerHTML=`<div class="pm-dot" style="background:${dotColor};margin-top:5px;"></div><div class="pm-content"><div class="pm-text">${escHtml(m.content)}</div><div class="pm-meta">${m.operator_name?`<span class="pm-op">👤 ${escHtml(m.operator_name)}</span>`:''}<span class="pm-time">${ts}</span>${m.resolved?'<span style="font-size:10px;font-weight:700;color:#10b981;">✓ 已解決</span>':''}</div></div>${commentCount?`<span class="pm-comments">💬 ${commentCount}</span>`:''}`;
+    list.appendChild(row);
+  });
+}
+
+function togglePanelMemoInput(){
+  const wrap=document.getElementById('panel-memo-input-wrap');
+  const isOpen=wrap.classList.toggle('open');
+  if(isOpen){const ta=document.getElementById('panel-memo-ta');ta.focus();ta.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submitPanelMemo();}};}
+}
+async function submitPanelMemo(){
+  const ta=document.getElementById('panel-memo-ta');const content=ta.value.trim();
+  if(!content){toast('請輸入備忘內容','warn');return;}
+  const opName=document.getElementById('user-select').value;if(!opName){toast('請先在右上角選擇作業員','error');return;}
+  if(!activeId){toast('無關聯圖層','error');return;}
+  await sb.from('memos').insert({content,asset_id:activeId,operator_name:opName,pinned:false,resolved:false});
+  ta.value='';document.getElementById('panel-memo-input-wrap').classList.remove('open');
+  toast('備忘已新增','success');await loadMemos();
+}
+
+function mkMemoBtn(emoji,title,active,activeBorder,activeBg,onClick){
+  const b=document.createElement('button');b.title=title;b.textContent=emoji;
+  b.style.cssText=`width:28px;height:28px;border-radius:7px;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;line-height:1;border:${active?activeBorder:'1px solid transparent'};background:${active?activeBg:'transparent'};opacity:${active?'1':'0.45'};transition:all .15s;`;
+  b.onmouseenter=()=>{b.style.opacity='1';if(!active)b.style.background='var(--card-hover)';};
+  b.onmouseleave=()=>{b.style.opacity=active?'1':'0.45';if(!active)b.style.background='transparent';};
+  b.onclick=onClick;return b;
+}
+
+function renderMemos(){
+  const list=document.getElementById('memo-list');
+  if(!memos.length){list.innerHTML='<div style="text-align:center;padding:32px;color:var(--text-muted);font-size:13px;">尚無備忘錄</div>';return;}
+  list.innerHTML='';
+  memos.forEach(m=>{
+    const comments=memoComments[m.id]||[];
+    const d=new Date(m.created_at);const ts=`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const linked=m.asset_id?assets.get(m.asset_id):null;const isExpanded=expandedComments.has(m.id);
+    const card=document.createElement('div');card.className='memo-card'+(m.pinned?' pinned':'');if(m.resolved)card.style.opacity='0.6';
+    if(editingMemoId===m.id){
+      const ta=document.createElement('textarea');ta.rows=3;ta.value=m.content;ta.style.cssText='width:100%;padding:8px 10px;font-size:13px;resize:none;border-radius:9px;margin-bottom:8px;';
+      const row=document.createElement('div');row.style.cssText='display:flex;gap:6px;';
+      const saveBtn=document.createElement('button');saveBtn.className='btn-accent';saveBtn.style.cssText='flex:1;padding:6px;font-size:12px;font-weight:700;border:none;border-radius:9px;';saveBtn.textContent='儲存';saveBtn.onclick=()=>saveEditMemo(m.id,ta.value);
+      const cancelBtn=document.createElement('button');cancelBtn.className='btn-ghost';cancelBtn.style.cssText='flex:1;padding:6px;font-size:12px;border-radius:9px;';cancelBtn.textContent='取消';cancelBtn.onclick=()=>{editingMemoId=null;renderMemos();};
+      row.append(saveBtn,cancelBtn);card.append(ta,row);
+    }else{
+      const topRow=document.createElement('div');topRow.style.cssText='display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;';
+      const contentDiv=document.createElement('div');contentDiv.style.cssText=`font-size:13px;font-weight:600;color:var(--text);line-height:1.5;flex:1;white-space:pre-wrap;word-break:break-all;${m.resolved?'text-decoration:line-through;color:var(--text-muted);':''}`;contentDiv.textContent=m.content;
+      const btnRow=document.createElement('div');btnRow.style.cssText='display:flex;align-items:center;gap:3px;flex-shrink:0;';
+      btnRow.append(mkMemoBtn(m.resolved?'✅':'☑️',m.resolved?'取消解決':'標記已解決',m.resolved,'1px solid rgba(16,185,129,.4)','rgba(16,185,129,.12)',()=>toggleResolve(m.id,!m.resolved)),mkMemoBtn('📌',m.pinned?'取消置頂':'置頂',m.pinned,'1px solid rgba(245,158,11,.4)','rgba(245,158,11,.1)',()=>togglePin(m.id,!m.pinned)),mkMemoBtn('✏️','編輯',false,'','',()=>{editingMemoId=m.id;renderMemos();}),mkMemoBtn('🗑️','刪除',false,'','',()=>deleteMemo(m.id)));
+      topRow.append(contentDiv,btnRow);card.appendChild(topRow);
+      const metaRow=document.createElement('div');metaRow.style.cssText='display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;';
+      if(m.operator_name){const opBadge=document.createElement('span');opBadge.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;color:var(--accent);background:var(--accent-dim);border:1px solid var(--accent-border);border-radius:99px;padding:2px 9px;';opBadge.textContent='👤 '+m.operator_name;metaRow.appendChild(opBadge);}
+      const timeSpan=document.createElement('span');timeSpan.style.cssText='font-size:10px;color:var(--text-muted);font-weight:600;';timeSpan.textContent=ts;metaRow.appendChild(timeSpan);
+      if(linked){const linkBadge=document.createElement('span');linkBadge.style.cssText='font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);color:#818cf8;cursor:pointer;';linkBadge.textContent='🔗 '+linked.name;linkBadge.onclick=()=>focusOn(m.asset_id);metaRow.appendChild(linkBadge);}
+      if(m.resolved){const resolvedTag=document.createElement('span');resolvedTag.style.cssText='font-size:10px;font-weight:700;color:#10b981;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);border-radius:99px;padding:1px 8px;';resolvedTag.textContent='✓ 已解決';metaRow.appendChild(resolvedTag);}
+      card.appendChild(metaRow);
+      const commentSection=document.createElement('div');commentSection.style.cssText='border-top:1px solid var(--border);padding-top:8px;';
+      const toggleBtn=document.createElement('button');toggleBtn.style.cssText='display:flex;align-items:center;gap:5px;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:11px;font-weight:700;padding:0;width:100%;';
+      toggleBtn.innerHTML=`<span style="font-size:13px;">💬</span><span>留言</span>${comments.length?`<span style="background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--accent);border-radius:99px;padding:0 6px;font-size:10px;font-weight:800;">${comments.length}</span>`:''}<span style="margin-left:auto;">${isExpanded?'▲':'▼'}</span>`;
+      toggleBtn.onclick=()=>{if(expandedComments.has(m.id))expandedComments.delete(m.id);else expandedComments.add(m.id);renderMemos();};
+      commentSection.appendChild(toggleBtn);
+      if(isExpanded){
+        const commentBody=document.createElement('div');commentBody.style.cssText='display:flex;flex-direction:column;gap:6px;margin-top:8px;';
+        comments.forEach(c=>{const cd=new Date(c.created_at);const cts=`${cd.getMonth()+1}/${cd.getDate()} ${String(cd.getHours()).padStart(2,'0')}:${String(cd.getMinutes()).padStart(2,'0')}`;const cDiv=document.createElement('div');cDiv.style.cssText='padding:7px 10px;background:var(--surface2);border-radius:9px;border:1px solid var(--border);';const cHeader=document.createElement('div');cHeader.style.cssText='display:flex;align-items:center;gap:6px;margin-bottom:3px;';const opSpan=document.createElement('span');opSpan.style.cssText='font-size:11px;font-weight:800;color:var(--accent);';opSpan.textContent=c.operator_name||'匿名';const tsSpan=document.createElement('span');tsSpan.style.cssText='font-size:10px;color:var(--text-muted);';tsSpan.textContent=cts;const delCBtn=document.createElement('button');delCBtn.style.cssText='margin-left:auto;width:20px;height:20px;border:none;background:none;cursor:pointer;color:var(--text-muted);font-size:12px;opacity:0.6;';delCBtn.textContent='✕';delCBtn.title='刪除留言';delCBtn.onclick=()=>deleteComment(c.id);cHeader.append(opSpan,tsSpan,delCBtn);const cContent=document.createElement('div');cContent.style.cssText='font-size:12px;color:var(--text);line-height:1.5;word-break:break-all;';cContent.textContent=c.content;cDiv.append(cHeader,cContent);commentBody.appendChild(cDiv);});
+        const inputRow=document.createElement('div');inputRow.style.cssText='display:flex;gap:6px;align-items:flex-end;margin-top:2px;';
+        const cTa=document.createElement('textarea');cTa.rows=2;cTa.placeholder='輸入留言（Enter 送出）...';cTa.style.cssText='flex:1;padding:7px 10px;font-size:12px;resize:none;border-radius:9px;';
+        const cBtn=document.createElement('button');cBtn.className='btn-accent';cBtn.style.cssText='padding:7px 12px;font-size:12px;font-weight:700;border:none;border-radius:9px;flex-shrink:0;';cBtn.textContent='送出';
+        cBtn.onclick=()=>submitComment(m.id,cTa.value,cTa);cTa.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submitComment(m.id,cTa.value,cTa);}});
+        inputRow.append(cTa,cBtn);commentBody.appendChild(inputRow);commentSection.appendChild(commentBody);
+      }
+      card.appendChild(commentSection);
+    }
+    list.appendChild(card);
+  });
+}
+
+async function addMemo(){const content=document.getElementById('memo-input').value.trim();if(!content){toast('請輸入備忘內容','warn');return;}const opName=document.getElementById('user-select').value;if(!opName){toast('請先在右上角選擇作業員','error');return;}const assetId=document.getElementById('memo-asset-sel').value||null;await sb.from('memos').insert({content,asset_id:assetId,operator_name:opName,pinned:false,resolved:false});document.getElementById('memo-input').value='';toast('備忘已新增','success');await loadMemos();}
+async function submitComment(memoId,content,taEl){content=(content||'').trim();if(!content){toast('留言不能為空','warn');return;}const opName=document.getElementById('user-select').value;if(!opName){toast('請先在右上角選擇作業員','error');return;}await sb.from('memo_comments').insert({memo_id:memoId,content,operator_name:opName});if(taEl)taEl.value='';expandedComments.add(memoId);toast('留言已送出','success');await loadMemos();}
+async function deleteComment(id){if(!confirm('確定刪除此留言？'))return;await sb.from('memo_comments').delete().eq('id',id);await loadMemos();}
+async function toggleResolve(id,resolved){await sb.from('memos').update({resolved}).eq('id',id);toast(resolved?'已標記解決 ✓':'已取消解決',resolved?'success':'info');await loadMemos();}
+async function saveEditMemo(id,content){content=content.trim();if(!content){toast('內容不能為空','error');return;}await sb.from('memos').update({content}).eq('id',id);editingMemoId=null;toast('備忘已更新','success');await loadMemos();}
+async function togglePin(id,pinned){await sb.from('memos').update({pinned}).eq('id',id);await loadMemos();}
+async function deleteMemo(id){if(!confirm('確定刪除？'))return;await sb.from('memos').delete().eq('id',id);await loadMemos();toast('已刪除','info');}
+function updateMemoCount(){const cnt=document.getElementById('memo-count');const unresolved=memos.filter(m=>!m.resolved).length;if(unresolved>0){cnt.style.display='inline';cnt.textContent=unresolved;}else cnt.style.display='none';}
+
+// ── init ──
+async function init(){
+  map=L.map('map',{zoomControl:false,attributionControl:true}).setView([23.975,121.605],14);
+  tileLayer=buildTile(true).addTo(map);L.control.zoom({position:'topright'}).addTo(map);
+  document.getElementById('btn-toggle').onclick=()=>{document.getElementById('sidebar').classList.toggle('collapsed');setTimeout(()=>map.invalidateSize(),400);};
+  document.getElementById('locate-input').addEventListener('keydown',e=>{if(e.key==='Enter')locateCoord();});
+  document.getElementById('user-select').addEventListener('change',()=>syncMemoOpHint());
+  const ctxMenu=document.getElementById('ctx-menu');
+  map.on('contextmenu',e=>{e.originalEvent.preventDefault();const lat=e.latlng.lat,lng=e.latlng.lng;const[east,north]=to3826(lng,lat);_ctxCoord={lat,lng,east,north};document.getElementById('ctx-97-val').innerText=`E ${east.toFixed(3)}, N ${north.toFixed(3)}`;document.getElementById('ctx-wgs-val').innerText=`${lat.toFixed(6)}, ${lng.toFixed(6)}`;const mx=e.originalEvent.clientX,my=e.originalEvent.clientY;ctxMenu.style.left=(mx+230>window.innerWidth?mx-230:mx)+'px';ctxMenu.style.top=(my+120>window.innerHeight?my-120:my)+'px';ctxMenu.style.display='block';});
+  document.getElementById('ctx-97').addEventListener('click',()=>copyCoord('97'));
+  document.getElementById('ctx-wgs').addEventListener('click',()=>copyCoord('wgs'));
+  document.addEventListener('click',e=>{if(!ctxMenu.contains(e.target))ctxMenu.style.display='none';});
+  map.on('click',()=>ctxMenu.style.display='none');
+  sb=supabase.createClient(SUPA_URL,SUPA_KEY);
+  setOnline(true);document.getElementById('loading').style.display='none';lucide.createIcons();toast('系統連線成功','success');
+  await loadPeriodCfg();await loadAll();subscribeRT();
+  const{data:mData}=await sb.from('memos').select('*').order('pinned',{ascending:false}).order('created_at',{ascending:false});
+  memos=mData||[];updateMemoCount();
+}
+
+async function loadAll(){
+  const[aRes,sRes,oRes]=await Promise.all([
+    sb.from('assets').select('id,display_name,type,bounds_json,img_url,points_url,manual_period,created_at'),
+    sb.from('asset_status').select('*'),
+    sb.from('operators').select('*').order('name')
+  ]);
+  const sMap={};(sRes.data||[]).forEach(s=>sMap[s.asset_id]=s);
+  operators=oRes.data||[];
+  const rows=aRes.data||[];let i=0;
+  function batchAdd(){const end=Math.min(i+8,rows.length);for(;i<end;i++){const row={...rows[i]};addAsset(row,sMap[row.id]||null);}if(i<rows.length)requestAnimationFrame(batchAdd);else{renderOpUI();renderOpFilterUI();refreshAll();}}
+  requestAnimationFrame(batchAdd);
+}
+
+function subscribeRT(){
+  sb.channel('rt')
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'assets'},async e=>{const{data:s}=await sb.from('asset_status').select('*').eq('asset_id',e.new.id).maybeSingle();addAsset(e.new,s||null);refreshAll();toast(`新圖層：${e.new.display_name}`,'info');})
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'assets'},e=>{const a=assets.get(e.new.id);if(!a)return;a.name=e.new.display_name;a.display_name=e.new.display_name;a.manual_period=e.new.manual_period||'';if(a.type==='img')a.rect.setTooltipContent(e.new.display_name);refreshAll();})
+    .on('postgres_changes',{event:'DELETE',schema:'public',table:'assets'},e=>{removeLayer(e.old.id);refreshAll();toast('圖層已刪除','warn');})
+    .on('postgres_changes',{event:'*',schema:'public',table:'asset_status'},e=>{const id=e.new?.asset_id||e.old?.asset_id;if(assets.has(id))assets.get(id).statusData=e.eventType==='DELETE'?null:e.new;refreshAll();if(e.new?.status==='claimed')toast(`${e.new.operator_name} 認領了路段`,'info');if(e.new?.status==='done')toast(`${e.new.operator_name} 完成了路段 ✓`,'success');})
+    .on('postgres_changes',{event:'*',schema:'public',table:'operators'},async()=>{const{data}=await sb.from('operators').select('*').order('name');operators=data||[];renderOpUI();renderOpFilterUI();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'memos'},async()=>{const{data}=await sb.from('memos').select('*').order('pinned',{ascending:false}).order('created_at',{ascending:false});memos=data||[];updateMemoCount();if(memoOpen){const{data:cData}=await sb.from('memo_comments').select('*').order('created_at',{ascending:true});memoComments={};(cData||[]).forEach(c=>{if(!memoComments[c.memo_id])memoComments[c.memo_id]=[];memoComments[c.memo_id].push(c);});renderMemos();}if(activeId)renderPanelMemos(activeId);})
+    .on('postgres_changes',{event:'*',schema:'public',table:'memo_comments'},async()=>{const{data:cData}=await sb.from('memo_comments').select('*').order('created_at',{ascending:true});memoComments={};(cData||[]).forEach(c=>{if(!memoComments[c.memo_id])memoComments[c.memo_id]=[];memoComments[c.memo_id].push(c);});if(memoOpen)renderMemos();if(activeId)renderPanelMemos(activeId);})
+    .on('postgres_changes',{event:'*',schema:'public',table:'app_settings'},async e=>{if(e.new?.key==='period_config'&&e.new?.value){periodCfg=e.new.value;renderList();toast('分界設定已更新','info');}})
+    .subscribe();
+}
+
+function addAsset(row,sd){if(assets.has(row.id))return;row.type==='img'?addImg(row,sd):addPts(row,sd);}
+
+function addImg(row,sd){
+  if(assets.has(row.id))return;
+  const b=row.bounds_json;if(b.w==null||b.e==null||b.s==null||b.n==null)return;
+  const sw=to84(b.w,b.s),ne=to84(b.e,b.n);
+  function mkBounds(){return L.latLngBounds(L.latLng(sw[1],sw[0]),L.latLng(ne[1],ne[0]));}
+  const overlay=L.imageOverlay(row.img_url||row.img_data||'',mkBounds(),{opacity:0.85,interactive:false}).addTo(map);
+  const rect=L.rectangle(mkBounds(),{color:sColor(sd?.status),weight:2,fill:false,interactive:true}).addTo(map);
+  rect.bindTooltip(row.display_name,{className:'tt',sticky:true,permanent:false});
+  const fn=()=>openPanel(row.id);rect.on('click',fn);
+  assets.set(row.id,{type:'img',rect,overlay,mkBounds,_clickHandler:fn,name:row.display_name,display_name:row.display_name,statusData:sd,manual_period:row.manual_period||''});
+}
+
+function parseDMS(val){if(val==null)return null;if(typeof val==='number')return isNaN(val)?null:val;const s=String(val).trim();if(/^-?[\d.]+$/.test(s))return parseFloat(s);const parts=s.match(/[\d.]+/g);if(!parts||parts.length<2)return null;return parseFloat(parts[0])+parseFloat(parts[1])/60+parseFloat(parts[2]||0)/3600;}
+
+function addPts(row,sd){
+  const group=L.featureGroup().addTo(map);const color=sColor(sd?.status||'none');let loaded=false;
+  async function ensureLoaded(){
+    if(loaded)return;loaded=true;let features=[];
+    if(row.points_url){try{const res=await fetch(row.points_url);const json=await res.json();if(Array.isArray(json))features=json;else if(json?.type==='FeatureCollection')features=json.features||[];else if(json?.type==='Feature')features=[json];}catch(e){console.warn('[addPts]',e);}}
+    else if(row.points_json){const raw=row.points_json;if(Array.isArray(raw))features=raw;else if(raw?.type==='FeatureCollection')features=raw.features||[];else if(raw?.type==='Feature')features=[raw];}
+    features.forEach(f=>{
+      let lat=null,lng=null;
+      if(f.geometry?.coordinates){const cx=parseFloat(f.geometry.coordinates[0]),cy=parseFloat(f.geometry.coordinates[1]);if(!isNaN(cx)&&!isNaN(cy)){if(looksWGS84(cx,cy)){lng=cx;lat=cy;}else{const w=to84(cx,cy);lng=w[0];lat=w[1];}}}
+      if(lat===null){const p=f.properties||{};const pLat=parseDMS(p['緯度']??p['lat']??p['latitude']);const pLng=parseDMS(p['經度']??p['lng']??p['longitude']);if(pLat!==null&&pLng!==null&&pLat>20&&pLat<30&&pLng>100&&pLng<130){lat=pLat;lng=pLng;}}
+      if(lat!==null&&lng!==null){const marker=L.circleMarker([lat,lng],{radius:6,fillColor:color,color:color,weight:0,fillOpacity:1,renderer:canvasRenderer}).addTo(group);const label=getStdProps(f.properties||{}).POINT_NAME||null;if(label)marker.bindTooltip(label,{className:'tt',sticky:true,permanent:false});}
+    });
+    const a=assets.get(row.id);if(a){a._rawFeatures=features;const gb=group.getBounds();if(gb.isValid())a.mkBounds=()=>gb;}
+  }
+  group.bindTooltip(row.display_name,{className:'tt',sticky:true});
+  const fn=()=>{ensureLoaded();openPanel(row.id);};group.on('click',fn);
+  assets.set(row.id,{type:'point',visual:group,mkBounds:null,_clickHandler:fn,_ensureLoaded:ensureLoaded,name:row.display_name,display_name:row.display_name,statusData:sd,_rawFeatures:[],manual_period:row.manual_period||''});
+  ensureLoaded();
+}
+
+function removeLayer(id){const a=assets.get(id);if(!a)return;if(a.type==='img'){map.removeLayer(a.rect);map.removeLayer(a.overlay);}else map.removeLayer(a.visual);assets.delete(id);}
+
+function applyMapStyles(){
+  let csw=null,cne=null;const fitNeeded=curOp!=='all'||activePeriod!=='all';
+  assets.forEach(a=>{
+    const op=a.statusData?.operator_name||null,st=a.statusData?.status||'none';
+    const period=effectivePeriod(a);
+    const opMatch=curOp==='all'||(op===curOp&&(st==='claimed'||st==='done'));
+    const periodMatch=activePeriod==='all'||period===activePeriod;
+    const show=opMatch&&periodMatch;
+    if(a.type==='img'){a.overlay.setOpacity(show?0.85:0);a.rect.setStyle({color:sColor(st),opacity:show?1:0,fillOpacity:0});if(show)a.rect.on('click',a._clickHandler);else a.rect.off('click',a._clickHandler);}
+    else{const c=sColor(st);a.visual.eachLayer(l=>{if(l.setStyle)l.setStyle({fillColor:c,color:c,fillOpacity:show?1:0,opacity:show?1:0});});if(show)a.visual.on('click',a._clickHandler);else a.visual.off('click',a._clickHandler);}
+    if(show&&fitNeeded&&a.mkBounds){const bd=a.mkBounds();if(bd.isValid()){if(!csw){csw=bd.getSouthWest();cne=bd.getNorthEast();}else{csw=L.latLng(Math.min(csw.lat,bd.getSouth()),Math.min(csw.lng,bd.getWest()));cne=L.latLng(Math.max(cne.lat,bd.getNorth()),Math.max(cne.lng,bd.getEast()));}}}
+  });
+  if(fitNeeded&&csw&&cne)map.fitBounds(L.latLngBounds(csw,cne),{padding:[80,80],maxZoom:17,animate:false});
+}
+
+function renderList(){
+  const list=document.getElementById('asset-list');
+  const kw=(document.getElementById('search-input')?.value||'').trim().toLowerCase();
+  let gDone=0,gTotal=0;assets.forEach(a=>{gTotal++;if(a.statusData?.status==='done')gDone++;});
+  const gp=gTotal?Math.round(gDone/gTotal*100):0;
+  document.getElementById('stat-percent').innerText=gp+'%';
+  document.getElementById('progress-bar').style.width=gp+'%';
+  const sorted=[...assets.entries()].sort((a,b)=>{const cmp=a[1].name.localeCompare(b[1].name,'zh-TW');return sortOrder==='asc'?cmp:-cmp;});
+  const frag=document.createDocumentFragment();
+  const dayDefaultCollapsed=isDayDefaultCollapsed();
+
+  if(curTab==='img'){
+    sorted.forEach(([id,asset])=>{
+      if(asset.type!=='img')return;
+      const st=asset.statusData?.status||'none',op=asset.statusData?.operator_name||null;
+      if(curFilter!=='all'&&st!==curFilter)return;if(curOp!=='all'&&op!==curOp)return;
+      if(kw&&!asset.name.toLowerCase().includes(kw))return;
+      frag.appendChild(makeCard(id,asset,kw));
+    });
+  }else{
+    const PERIOD_ORDER=['初','中','末','其他'];
+    const tree=new Map();PERIOD_ORDER.forEach(p=>tree.set(p,new Map()));
+    sorted.forEach(([id,asset])=>{
+      if(asset.type!=='point')return;
+      const st=asset.statusData?.status||'none',op=asset.statusData?.operator_name||null;
+      if(curFilter!=='all'&&st!==curFilter)return;if(curOp!=='all'&&op!==curOp)return;
+      if(kw&&!asset.name.toLowerCase().includes(kw))return;
+      const period=effectivePeriod(asset);if(activePeriod!=='all'&&period!==activePeriod)return;
+      const mm=getMonth(asset.name)||'??';const mmdd=getMMDD(asset.name)||'????';
+      const pMap=tree.get(period)||tree.get('其他');
+      if(!pMap.has(mm))pMap.set(mm,new Map());if(!pMap.get(mm).has(mmdd))pMap.get(mm).set(mmdd,[]);
+      pMap.get(mm).get(mmdd).push([id,asset]);
+    });
+    tree.forEach((mMap,period)=>{
+      if(!mMap.size)return;
+      const pKey='p:'+period;const pCollapsed=isCollapsed(pKey,false);
+      let pDone=0,pTotal=0;mMap.forEach(dMap=>dMap.forEach(items=>items.forEach(([,a])=>{pTotal++;if(a.statusData?.status==='done')pDone++;})));
+      const pPct=pTotal?Math.round(pDone/pTotal*100):0;
+      const pHdr=document.createElement('div');pHdr.className='group-hdr level-period';
+      pHdr.innerHTML=`<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:13px;font-weight:900;color:var(--accent);">${period}</span><span style="font-size:10px;color:var(--text-muted);">${pTotal} 個</span></div><div style="display:flex;align-items:center;gap:7px;"><div style="width:56px;height:4px;background:var(--border);border-radius:99px;overflow:hidden;"><div style="width:${pPct}%;height:100%;background:linear-gradient(90deg,#6366f1,#10b981);border-radius:99px;"></div></div><span style="font-size:10px;font-weight:700;color:var(--accent);">${pPct}%</span><span style="font-size:11px;color:var(--text-muted);">${pCollapsed?'▶':'▼'}</span></div>`;
+      pHdr.addEventListener('click',()=>toggleCollapse(pKey,false));frag.appendChild(pHdr);
+      if(pCollapsed)return;
+      const pBody=document.createElement('div');pBody.style.cssText='display:flex;flex-direction:column;gap:2px;margin-top:2px;';
+      [...mMap.entries()].sort((a,b)=>a[0].localeCompare(b[0])).forEach(([mm,dMap])=>{
+        const mKey='m:'+period+':'+mm;const mCollapsed=isCollapsed(mKey,false);
+        let mDone=0,mTotal=0;dMap.forEach(items=>items.forEach(([,a])=>{mTotal++;if(a.statusData?.status==='done')mDone++;}));
+        const mPct=mTotal?Math.round(mDone/mTotal*100):0;
+        const mHdr=document.createElement('div');mHdr.className='group-hdr level-month';
+        mHdr.innerHTML=`<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:11px;font-weight:800;color:var(--text-sub);">${mm==='??'?'未知月份':monthLabel(mm)}</span><span style="font-size:10px;color:var(--text-muted);">${mTotal}</span></div><div style="display:flex;align-items:center;gap:5px;"><span style="font-size:10px;font-weight:700;color:var(--text-sub);">${mPct}%</span><span style="font-size:10px;color:var(--text-muted);">${mCollapsed?'▶':'▼'}</span></div>`;
+        mHdr.addEventListener('click',()=>toggleCollapse(mKey,false));pBody.appendChild(mHdr);
+        if(mCollapsed)return;
+        const mBody=document.createElement('div');mBody.style.cssText='display:flex;flex-direction:column;gap:2px;margin-top:2px;';
+        [...dMap.entries()].sort((a,b)=>a[0].localeCompare(b[0])).forEach(([mmdd,items])=>{
+          const dKey='d:'+period+':'+mmdd;const dCollapsed=isCollapsed(dKey,dayDefaultCollapsed);
+          const dDone=items.filter(([,a])=>a.statusData?.status==='done').length;
+          const dHdr=document.createElement('div');dHdr.className='group-hdr level-day';
+          dHdr.innerHTML=`<div style="display:flex;align-items:center;gap:5px;"><span style="font-size:10px;font-weight:700;color:var(--text-muted);">${mmdd==='????'?'未知日期':dayLabel(mmdd)}</span></div><div style="display:flex;align-items:center;gap:4px;"><span style="font-size:10px;color:${dDone===items.length&&items.length>0?'#10b981':'var(--text-muted)'};">${dDone}/${items.length}</span><span style="font-size:10px;color:var(--text-muted);">${dCollapsed?'▶':'▼'}</span></div>`;
+          dHdr.addEventListener('click',()=>toggleCollapse(dKey,dayDefaultCollapsed));mBody.appendChild(dHdr);
+          if(dCollapsed)return;
+          const dBody=document.createElement('div');dBody.style.cssText='display:flex;flex-direction:column;gap:3px;margin-top:2px;padding-left:22px;';
+          items.forEach(([id,asset])=>dBody.appendChild(makeCard(id,asset,kw)));mBody.appendChild(dBody);
+        });
+        pBody.appendChild(mBody);
+      });
+      frag.appendChild(pBody);
+    });
+  }
+  list.innerHTML='';list.appendChild(frag);lucide.createIcons();
+}
+
+// ★ makeCard：加入 inline period 標籤按鈕
+function makeCard(id,asset,kw=''){
+  const st=asset.statusData?.status||'none',op=asset.statusData?.operator_name||null;
+  let dotC=sColor(st),sub='等待認領',subStyle='color:#ef4444;font-weight:600;';
+  if(st==='claimed'){sub=`👷 ${op||'作業中'}`;subStyle='color:#f59e0b;font-weight:700;';}
+  if(st==='done'){sub=`✅ ${op||'已完工'}`;subStyle='color:#10b981;font-weight:700;';}
+  const nameHtml=highlight(asset.name,kw);
+  const manPeriod=asset.manual_period||'';
+  const autoPer=autoPeriod(asset.name)||'';
+  const shownPeriod=manPeriod||autoPer;
+  const isManual=!!manPeriod;
+  const assetMemos=memos.filter(m=>m.asset_id===id);
+  const unresolvedMemos=assetMemos.filter(m=>!m.resolved).length;
+  const memoTag=unresolvedMemos?`<span style="display:inline-flex;align-items:center;gap:2px;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:800;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#ef4444;">📝${unresolvedMemos}</span>`:'';
+
+  const card=document.createElement('div');
+  card.className='asset-card'+(activeId===id?' active':'');
+  card.id='card-'+id;
+
+  // ── period inline btn（此元素稍後 JS 綁定）──
+  const periodBtn=document.createElement('div');
+  periodBtn.className='period-inline-btn'+(isManual?'':' auto');
+  periodBtn.style.position='relative';// for popover anchor
+  periodBtn.title=isManual?`手動設定：${manPeriod}`:'點擊設定期別';
+  periodBtn.innerHTML=shownPeriod
+    ?`${shownPeriod}${isManual?'<span style="font-size:8px;margin-left:1px;opacity:.7;">▲</span>':'<span style="font-size:8px;margin-left:1px;opacity:.5;">▼</span>'}`
+    :`?<span style="font-size:8px;margin-left:1px;opacity:.5;">▼</span>`;
+  periodBtn.addEventListener('click',e=>togglePeriodPopover(e,id));
+
+  // ── 主內容 ──
+  const focusDiv=document.createElement('div');
+  focusDiv.className='card-focus';
+  focusDiv.style.cssText='flex:1;min-width:0;cursor:pointer;';
+  focusDiv.innerHTML=`<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;"><span style="font-weight:700;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;">${nameHtml}</span>${memoTag}</div><div style="font-size:11px;margin-top:1px;${subStyle}">${sub}</div>`;
+  focusDiv.addEventListener('click',()=>focusOn(id));
+
+  // ── 按鈕群 ──
+  const btnWrap=document.createElement('div');
+  btnWrap.style.cssText='display:flex;gap:2px;flex-shrink:0;';
+  if(asset.type==='point'){
+    const csvBtn=document.createElement('button');
+    csvBtn.style.cssText='width:24px;height:24px;border-radius:6px;border:1px solid rgba(16,185,129,.35);background:rgba(16,185,129,.18);cursor:pointer;color:#10b981;display:flex;align-items:center;justify-content:center;font-size:11px;';
+    csvBtn.title='匯出 CSV';csvBtn.textContent='↓';csvBtn.addEventListener('click',()=>downloadCSV(id));
+    btnWrap.appendChild(csvBtn);
+  }
+  const editBtn=document.createElement('button');
+  editBtn.style.cssText='width:24px;height:24px;border-radius:6px;border:none;background:none;cursor:pointer;color:var(--text-muted);display:flex;align-items:center;justify-content:center;font-size:13px;opacity:0.6;';
+  editBtn.title='改名';editBtn.textContent='✏️';editBtn.addEventListener('click',()=>editAssetName(id));
+  const delBtn=document.createElement('button');
+  delBtn.style.cssText='width:24px;height:24px;border-radius:6px;border:none;background:none;cursor:pointer;color:var(--text-muted);display:flex;align-items:center;justify-content:center;font-size:13px;opacity:0.6;';
+  delBtn.title='刪除';delBtn.textContent='🗑️';delBtn.addEventListener('click',()=>deleteAsset(id));
+  btnWrap.append(editBtn,delBtn);
+
+  // dot
+  const dot=document.createElement('div');
+  dot.style.cssText=`width:7px;height:7px;border-radius:50%;background:${dotC};flex-shrink:0;box-shadow:0 0 5px ${dotC}66;`;
+
+  card.append(dot,focusDiv,periodBtn,btnWrap);
+  return card;
+}
+
+function refreshAll(){applyMapStyles();renderList();}
+function toggleSort(){sortOrder=sortOrder==='asc'?'desc':'asc';document.getElementById('sort-btn').innerText=sortOrder==='asc'?'↑':'↓';renderList();}
+function setFilter(f){curFilter=f;document.querySelectorAll('.chip[data-filter]').forEach(c=>c.classList.toggle('active',c.dataset.filter===f));for(const k of [...collapsedGroups.keys()]){if(k.startsWith('d:'))collapsedGroups.delete(k);}refreshAll();}
+function setTypeTab(t){curTab=t;document.querySelectorAll('.tab').forEach(c=>c.classList.toggle('active',c.dataset.type===t));refreshAll();}
+function setOpFilter(n){curOp=n;document.querySelectorAll('.op-chip').forEach(c=>c.classList.toggle('active',c.dataset.op===n));for(const k of [...collapsedGroups.keys()]){if(k.startsWith('d:'))collapsedGroups.delete(k);}refreshAll();}
+function renderOpFilterUI(){
+  const el=document.getElementById('op-filter-list');
+  el.innerHTML=`<div class="op-chip ${curOp==='all'?'active':''}" data-op="all" onclick="setOpFilter('all')">全部</div>`;
+  operators.forEach(op=>{const d=document.createElement('div');d.className='op-chip'+(curOp===op.name?' active':'');d.dataset.op=op.name;d.innerText=op.name;d.onclick=()=>setOpFilter(op.name);el.appendChild(d);});
+}
+function toggleTools(){const el=document.getElementById('tools-wrap'),icon=document.getElementById('fold-icon');const closed=el.classList.toggle('closed');icon.style.transform=closed?'rotate(180deg)':'rotate(0deg)';}
+
+function scrollToCard(id){
+  const asset=assets.get(id);if(!asset)return;
+  const period=effectivePeriod(asset);const mm=getMonth(asset.name)||'??';const mmdd=getMMDD(asset.name)||'????';
+  collapsedGroups.set('p:'+period,false);collapsedGroups.set('m:'+period+':'+mm,false);collapsedGroups.set('d:'+period+':'+mmdd,false);
+  if(activePeriod!=='all'&&activePeriod!==period){activePeriod='all';document.querySelectorAll('.period-chip').forEach(c=>c.classList.toggle('active',c.dataset.period==='all'));}
+  renderList();
+  requestAnimationFrame(()=>{const card=document.getElementById('card-'+id);if(card){card.scrollIntoView({behavior:'smooth',block:'center'});card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash');setTimeout(()=>card.classList.remove('flash'),1800);}});
+}
+
+async function focusOn(id){
+  const a=assets.get(id);if(!a)return;
+  if(a._ensureLoaded)await a._ensureLoaded();
+  if(a.mkBounds)map.fitBounds(a.mkBounds(),{padding:[80,80],animate:true});
+  openPanel(id);
+  if(a.type==='img'){let cnt=0;const orig=sColor(a.statusData?.status||'none');const fl=setInterval(()=>{cnt++;a.rect.setStyle({color:cnt%2===0?orig:'#fff',weight:cnt%2===0?2:3});if(cnt>=6){clearInterval(fl);a.rect.setStyle({color:orig,weight:2});}},180);}
+  else{let cnt=0;const fl=setInterval(()=>{cnt++;a.visual.eachLayer(l=>{if(l.setStyle)l.setStyle({radius:cnt%2===0?6:10});});if(cnt>=6){clearInterval(fl);a.visual.eachLayer(l=>{if(l.setStyle)l.setStyle({radius:6});});}},180);}
+  scrollToCard(id);
+}
+
+function openPanel(id){
+  activeId=id;const a=assets.get(id),s=a.statusData,st=s?.status||'none';
+  document.getElementById('ui-name').innerText=a.name;
+  const badge=document.getElementById('ui-badge');
+  const claimBtn=document.getElementById('btn-claim'),doneBtn=document.getElementById('btn-done'),releaseBtn=document.getElementById('btn-release');
+  const lockNotice=document.getElementById('lock-notice'),lockMsg=document.getElementById('lock-msg');
+  if(st==='done')badge.innerHTML=`<span style="display:inline-block;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:700;background:rgba(16,185,129,.1);color:#10b981;border:1px solid rgba(16,185,129,.25);">✅ 已完工：${s.operator_name}</span>`;
+  else if(st==='claimed')badge.innerHTML=`<span style="display:inline-block;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:700;background:rgba(245,158,11,.1);color:#f59e0b;border:1px solid rgba(245,158,11,.25);">👷 作業中：${s.operator_name}</span>`;
+  else badge.innerHTML=`<span style="display:inline-block;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:700;background:var(--input-bg);color:var(--text-muted);border:1px solid var(--border);">開放認領</span>`;
+  const curUser=document.getElementById('user-select').value;const isOwner=s?.operator_name===curUser;
+  if(st==='claimed'&&!isOwner){claimBtn.className='btn-accent btn-locked';claimBtn.onclick=null;doneBtn.className='btn-green btn-locked';doneBtn.onclick=null;releaseBtn.onclick=null;lockNotice.style.display='flex';lockMsg.innerText=`此區塊由 ${s.operator_name} 認領中。`;}
+  else if(st==='done'){claimBtn.className='btn-accent btn-locked';claimBtn.onclick=null;doneBtn.className='btn-green btn-locked';doneBtn.onclick=null;releaseBtn.onclick=()=>updateStatus('none');lockNotice.style.display='flex';lockMsg.innerText='此區塊已完工，如需修改請先釋出。';}
+  else{claimBtn.className='btn-accent';claimBtn.onclick=()=>updateStatus('claimed');doneBtn.className='btn-green';doneBtn.onclick=()=>updateStatus('done');releaseBtn.onclick=()=>updateStatus('none');lockNotice.style.display='none';}
+  document.getElementById('action-panel').style.display='block';
+  document.getElementById('panel-memo-input-wrap').classList.remove('open');
+  if(document.getElementById('panel-memo-ta'))document.getElementById('panel-memo-ta').value='';
+  renderPanelMemos(id);lucide.createIcons();refreshAll();
+  if(a.type==='point')scrollToCard(id);
+  else{if(curTab!=='img'){curTab='img';document.querySelectorAll('.tab').forEach(c=>c.classList.toggle('active',c.dataset.type==='img'));renderList();}requestAnimationFrame(()=>{const card=document.getElementById('card-'+id);if(card){card.scrollIntoView({behavior:'smooth',block:'center'});card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash');setTimeout(()=>card.classList.remove('flash'),1800);}});}
+}
+function closePanel(){document.getElementById('action-panel').style.display='none';activeId=null;refreshAll();}
+
+async function updateStatus(status){
+  if(!activeId)return;const uName=document.getElementById('user-select').value;
+  if(!uName&&status!=='none')return alert('請先選擇作業員');
+  const a=assets.get(activeId);const oldStatus=a?.statusData?.status||'none';
+  const action=status==='claimed'?'claimed':status==='done'?'done':'released';
+  await sb.from('asset_status').upsert({asset_id:activeId,status,operator_name:status==='none'?null:uName,updated_at:new Date().toISOString()},{onConflict:'asset_id'});
+  await writeAudit(activeId,a?.display_name||'',action,uName,oldStatus,status);closePanel();
+}
+
+// ── 檔案上傳 ──
+function triggerFile(id){document.getElementById(id).click();}
+document.getElementById('fi-json').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{pendingJson=JSON.parse(await f.text());toast('JSON 已讀取','success');}catch{alert('JSON 解析失敗');}e.target.value='';};
+document.getElementById('fi-png').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;if(!pendingJson)return alert('請先匯入 JSON');
+  const r=new FileReader();r.onload=ev=>{const img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');let w=img.width,h=img.height,max=1600;if(w>max||h>max){if(w>h){h=max/w*h;w=max;}else{w=max/h*w;h=max;}}canvas.width=w;canvas.height=h;canvas.getContext('2d').drawImage(img,0,0,w,h);let q=0.9,res=canvas.toDataURL('image/png');while(res.length>1000000&&q>0.1){res=canvas.toDataURL('image/jpeg',q);q-=0.1;}pendingImg=res;pendingManualPeriod='';selectModalPeriod('');document.getElementById('modal-name').value=pendingJson.name||f.name.split('.')[0];document.getElementById('modal-title').innerText='儲存 PNG 圖層';document.getElementById('modal-save').style.display='flex';};img.src=ev.target.result;};r.readAsDataURL(f);e.target.value='';
+};
+
+// ★ 批次上傳 GeoJSON
+document.getElementById('fi-geojson').onchange=async e=>{
+  const files=[...e.target.files];e.target.value='';
+  if(!files.length)return;
+  // 單檔：跟舊流程一樣，跳彈窗讓使用者確認名稱
+  if(files.length===1){
+    try{const json=JSON.parse(await files[0].text());pendingPoints=json.features||(Array.isArray(json)?json:[json]);pendingManualPeriod='';selectModalPeriod('');document.getElementById('modal-name').value=files[0].name.split('.')[0];document.getElementById('modal-title').innerText='儲存點位';document.getElementById('modal-save').style.display='flex';}catch{alert('GeoJSON 解析失敗');}
+    return;
+  }
+  // 多檔：直接批次上傳，名稱取自檔案名
+  const wrap=document.getElementById('batch-progress-wrap');
+  const fillEl=document.getElementById('batch-fill');
+  const labelEl=document.getElementById('batch-label');
+  const pctEl=document.getElementById('batch-pct');
+  const detailEl=document.getElementById('batch-detail');
+  // 確保工具列展開
+  const toolsWrap=document.getElementById('tools-wrap');
+  if(toolsWrap.classList.contains('closed')){
+    toolsWrap.classList.remove('closed');
+    document.getElementById('fold-icon').style.transform='rotate(0deg)';
+  }
+  wrap.classList.add('show');
+  const uName=document.getElementById('user-select').value;
+  let done=0,failed=0;
+  for(let i=0;i<files.length;i++){
+    const f=files[i];const name=f.name.replace(/\.(geojson|json)$/i,'');
+    labelEl.textContent=`上傳中 (${i+1}/${files.length})：${name}`;
+    pctEl.textContent=Math.round((i/files.length)*100)+'%';
+    fillEl.style.width=Math.round((i/files.length)*100)+'%';
+    try{
+      const json=JSON.parse(await f.text());
+      const features=json.features||(Array.isArray(json)?json:[json]);
+      const geojson={type:'FeatureCollection',features};
+      const fname=Date.now()+'_'+i+'.geojson';
+      const blob=new Blob([JSON.stringify(geojson)],{type:'application/geo+json'});
+      let pointsUrl=null;
+      const{error:pse}=await sb.storage.from('asset-points').upload(fname,blob,{contentType:'application/geo+json',upsert:false});
+      if(!pse)pointsUrl=sb.storage.from('asset-points').getPublicUrl(fname).data.publicUrl;
+      const manualP=pendingManualPeriod||null;
+      const{data:row,error:dbe}=await sb.from('assets').insert({display_name:name,type:'point',points_url:pointsUrl||null,points_json:pointsUrl?null:features,manual_period:manualP}).select().single();
+      if(dbe)throw dbe;
+      await writeAudit(row?.id,name,'created',uName,null,name);
+      done++;
+    }catch(err){failed++;detailEl.textContent=`❌ ${name} 失敗：${err.message}`;}
+  }
+  fillEl.style.width='100%';pctEl.textContent='100%';
+  labelEl.textContent=`完成！成功 ${done} 個${failed?`，失敗 ${failed} 個`:''}`;
+  detailEl.textContent='';
+  toast(`批次上傳完成：${done} 個成功${failed?`，${failed} 個失敗`:''}`,failed?'warn':'success');
+  setTimeout(()=>wrap.classList.remove('show'),4000);
+};
+
+async function doUpload(){
+  const name=document.getElementById('modal-name').value.trim();if(!name)return;
+  const btn=document.getElementById('modal-confirm'),st=document.getElementById('modal-status');btn.disabled=true;st.style.display='block';
+  const uName=document.getElementById('user-select').value;
+  try{
+    if(editId){const oldName=assets.get(editId)?.display_name||'';await sb.from('assets').update({display_name:name,manual_period:pendingManualPeriod||null}).eq('id',editId);await writeAudit(editId,name,'renamed',uName,oldName,name);toast('已更新','success');}
+    else if(pendingPoints){
+      const geojson={type:'FeatureCollection',features:pendingPoints};const fname=Date.now()+'.geojson';
+      const blob=new Blob([JSON.stringify(geojson)],{type:'application/geo+json'});let pointsUrl=null;st.innerText='上傳點位至 Storage...';
+      const{error:pse}=await sb.storage.from('asset-points').upload(fname,blob,{contentType:'application/geo+json',upsert:false});
+      if(!pse)pointsUrl=sb.storage.from('asset-points').getPublicUrl(fname).data.publicUrl;else toast(`Storage 失敗(${pse.message})，改存 DB`,'warn');
+      st.innerText='寫入資料庫...';
+      const{data,error:dbe}=await sb.from('assets').insert({display_name:name,type:'point',points_url:pointsUrl||null,points_json:pointsUrl?null:pendingPoints,manual_period:pendingManualPeriod||null}).select().single();
+      if(dbe)throw dbe;await writeAudit(data?.id,name,'created',uName,null,name);toast(pointsUrl?'點位圖層已上傳 ✓':'點位圖層已上傳 ✓','success');
+    }
+    else if(pendingImg&&pendingJson){
+      const fname=Date.now()+'.jpg',blob=b64Blob(pendingImg);
+      const{error:se}=await sb.storage.from('asset-images').upload(fname,blob,{contentType:'image/jpeg'});
+      let imgUrl=null,imgData=null;if(!se)imgUrl=sb.storage.from('asset-images').getPublicUrl(fname).data.publicUrl;else imgData=pendingImg;
+      const{data}=await sb.from('assets').insert({display_name:name,type:'img',bounds_json:pendingJson,img_url:imgUrl,img_data:imgData,manual_period:pendingManualPeriod||null}).select().single();
+      await writeAudit(data?.id,name,'created',uName,null,name);toast('PNG 圖層已上傳','success');
+    }
+    closeModal();
+  }catch(err){alert('上傳失敗：'+err.message);}finally{btn.disabled=false;st.style.display='none';}
+}
+function b64Blob(d){const[h,b]=d.split(','),mime=h.match(/:(.*?);/)[1];const bin=atob(b),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new Blob([u],{type:mime});}
+function editAssetName(id){editId=id;pendingManualPeriod=assets.get(id)?.manual_period||'';selectModalPeriod(pendingManualPeriod);document.getElementById('modal-title').innerText='修改名稱';document.getElementById('modal-name').value=assets.get(id).name;document.getElementById('modal-save').style.display='flex';}
+async function deleteAsset(id){if(confirm('確定刪除此圖層？')){const a=assets.get(id);const uName=document.getElementById('user-select').value;await writeAudit(id,a?.display_name||'','deleted',uName,null,null);await sb.from('assets').delete().eq('id',id);}}
+function closeModal(){document.getElementById('modal-save').style.display='none';editId=null;pendingJson=null;pendingImg=null;pendingPoints=null;pendingManualPeriod='';}
+function openHelp(){document.getElementById('modal-help').style.display='flex';lucide.createIcons();}
+function closeHelp(){document.getElementById('modal-help').style.display='none';}
+
+function renderOpUI(){
+  const sel=document.getElementById('user-select'),cur=sel.value;sel.innerHTML='<option value="">選擇作業員...</option>';operators.forEach(op=>{const o=document.createElement('option');o.value=op.name;o.innerText=op.name;sel.appendChild(o);});sel.value=cur;
+  const list=document.getElementById('op-list');list.innerHTML='';
+  operators.forEach(op=>{
+    const item=document.createElement('div');item.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:9px 11px;background:var(--card-bg);border:1px solid var(--border);border-radius:10px;';
+    item.innerHTML=`<div style="display:flex;align-items:center;gap:9px;"><div style="width:7px;height:7px;border-radius:50%;background:var(--accent);"></div><span style="font-weight:700;font-size:14px;color:var(--text);">${op.name}</span></div><div style="display:flex;gap:3px;"><button class="ren-btn" style="width:27px;height:27px;border-radius:6px;border:none;background:none;cursor:pointer;color:var(--text-muted);font-size:14px;">✏️</button><button class="dop-btn" style="width:27px;height:27px;border-radius:6px;border:none;background:none;cursor:pointer;color:var(--text-muted);font-size:14px;">🗑️</button></div>`;
+    item.querySelector('.ren-btn').addEventListener('click',()=>renameOperator(op.id,op.name));
+    item.querySelector('.dop-btn').addEventListener('click',()=>deleteOperator(op.id));
+    list.appendChild(item);
+  });
+}
+async function addOperator(){const name=document.getElementById('new-op-name').value.trim();if(name){await sb.from('operators').insert({name});document.getElementById('new-op-name').value='';toast(name+' 已新增','success');}}
+async function deleteOperator(id){if(confirm('移除此作業員？'))await sb.from('operators').delete().eq('id',id);}
+async function renameOperator(id,old){const n=prompt('修改姓名：',old);if(!n||n===old)return;const nn=n.trim();await sb.from('operators').update({name:nn}).eq('id',id);await sb.from('asset_status').update({operator_name:nn}).eq('operator_name',old);toast('名稱已更新','success');}
+function openOpManager(){document.getElementById('modal-op').style.display='flex';lucide.createIcons();}
+function closeOpManager(){document.getElementById('modal-op').style.display='none';}
+window.onload=init;
+</script>
+</body>
+</html>
