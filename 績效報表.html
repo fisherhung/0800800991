@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>花蓮人行道內頁績效分析報告</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 引入 Chart.js 標籤插件以顯示數字 -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f1f5f9; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
+        .table-header { background: #1e293b; color: white; }
+    </style>
+</head>
+<body class="p-4 md:p-10">
+    <div class="max-w-7xl mx-auto">
+        <!-- 頂部標題 -->
+        <div class="flex flex-col md:flex-row justify-between items-end mb-10 border-b-4 border-blue-600 pb-4">
+            <div>
+                <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight">花蓮人行道內頁績效分析</h1>
+                <p class="text-lg text-slate-600 mt-2 font-medium">總專案里程：<span class="text-blue-600">50.1 KM</span> | 統計數據全紀錄</p>
+            </div>
+            <div class="text-right text-slate-500 text-sm">
+                報表生成日期：2026/03/19
+            </div>
+        </div>
+
+        <!-- 圖表區 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
+            <div class="card p-6">
+                <h3 class="text-xl font-bold mb-6 text-slate-800 flex items-center">
+                    <span class="w-2 h-6 bg-blue-600 mr-2 rounded"></span> 長度產出佔比 (KM)
+                </h3>
+                <div class="h-[400px]">
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
+            <div class="card p-6">
+                <h3 class="text-xl font-bold mb-6 text-slate-800 flex items-center">
+                    <span class="w-2 h-6 bg-emerald-600 mr-2 rounded"></span> 每日產能效率 (KM/天)
+                </h3>
+                <div class="h-[400px]">
+                    <canvas id="barChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 詳細績效表格 -->
+        <div class="card overflow-hidden">
+            <div class="p-6 bg-slate-50 border-b">
+                <h3 class="text-xl font-bold text-slate-800 tracking-wide text-center">績效評點與詳細數據清單</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead class="table-header">
+                        <tr>
+                            <th class="p-4 border-r border-slate-700">成員</th>
+                            <th class="p-4 border-r border-slate-700 text-center">繪圖天數（含加班）</th>
+                            <th class="p-4 border-r border-slate-700 text-center">個人長度 (KM)</th>
+                            <th class="p-4 border-r border-slate-700 text-center bg-blue-900">獎金比例</th>
+                            <th class="p-4">詳細評點 (優點 / 失誤待改進)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        <!-- 洪 -->
+                        <tr class="hover:bg-blue-50 transition-colors">
+                            <td class="p-4 font-bold text-lg text-blue-800 border-r">洪</td>
+                            <td class="p-4 border-r text-center font-medium">10 天</td>
+                            <td class="p-4 border-r text-center font-medium">21.2 KM</td>
+                            <td class="p-4 border-r text-center font-bold text-blue-600 text-lg">28%</td>
+                            <td class="p-4 leading-relaxed">
+                                <p class="text-emerald-700 font-bold mb-1">【優點】一個正常發揮的員工。</p>
+                                <p class="text-slate-600 italic">【失誤】被問到重複性高的問題會不耐煩。</p>
+                            </td>
+                        </tr>
+                        <!-- 怡汝 -->
+                        <tr class="hover:bg-emerald-50 transition-colors">
+                            <td class="p-4 font-bold text-lg text-emerald-800 border-r">怡汝</td>
+                            <td class="p-4 border-r text-center font-medium">12 天</td>
+                            <td class="p-4 border-r text-center font-medium">13.3 KM</td>
+                            <td class="p-4 border-r text-center font-bold text-emerald-600 text-lg">22%</td>
+                            <td class="p-4 leading-relaxed">
+                                <p class="text-emerald-700 font-bold mb-1">【優點】產出穩定且總長度排名第二，對於中長期任務掌控良好。</p>
+                                <p class="text-slate-700">【失誤】1. 無人機產圖有3張嚴重錯誤導致重產，造成後續倒霉蛋要重新繪製。 2. 由承翰發現少了重要的點選控制點步驟。</p>
+                            </td>
+                        </tr>
+                        <!-- 承翰 -->
+                        <tr class="hover:bg-amber-50 transition-colors">
+                            <td class="p-4 font-bold text-lg text-amber-800 border-r">承翰</td>
+                            <td class="p-4 border-r text-center font-medium">6 天</td>
+                            <td class="p-4 border-r text-center font-medium">5.2 KM</td>
+                            <td class="p-4 border-r text-center font-bold text-amber-600 text-lg">25%</td>
+                            <td class="p-4 leading-relaxed text-slate-700">
+                                <p class="text-emerald-700 font-bold mb-1">【優點】全期投入教學與群組外業回覆，負責無人機產圖，本案靈魂人物。</p>
+                                <p class="text-slate-500 italic">【評語】總產出長度偏低，但看完優點後就能理解了。</p>
+                            </td>
+                        </tr>
+                        <!-- 美玲 -->
+                        <tr class="hover:bg-purple-50 transition-colors">
+                            <td class="p-4 font-bold text-lg text-purple-800 border-r">美玲</td>
+                            <td class="p-4 border-r text-center font-medium">5 天</td>
+                            <td class="p-4 border-r text-center font-medium">4.0 KM</td>
+                            <td class="p-4 border-r text-center font-bold text-purple-600 text-lg">10%</td>
+                            <td class="p-4 leading-relaxed">
+                                <p class="text-emerald-700 font-bold mb-1">【優點】作業精簡，短天數內完成基本配額，配合度高。</p>
+                                <p class="text-slate-700 font-bold">【失誤】</p>
+                                <ul class="list-disc ml-5 text-slate-700">
+                                    <li>1. 精密繪圖部分有嚴重缺失，造成後續倒霉蛋要重新繪製。</li>
+                                    <li>2. 缺失主因為電腦性能造成（即使純向量也極卡）。</li>
+                                    <li>3. 建議配備性能好的筆電給她（若未來還有相似案子）。</li>
+                                </ul>
+                            </td>
+                        </tr>
+                        <!-- 凱西 -->
+                        <tr class="hover:bg-red-50 transition-colors">
+                            <td class="p-4 font-bold text-lg text-red-800 border-r">凱西</td>
+                            <td class="p-4 border-r text-center font-medium">11 天</td>
+                            <td class="p-4 border-r text-center font-medium">6.4 KM</td>
+                            <td class="p-4 border-r text-center font-bold text-red-600 text-lg">18%</td>
+                            <td class="p-4 leading-relaxed text-slate-700">
+                                <p class="text-emerald-700 font-bold mb-1">【優點】繪製成果無可挑惕，正確性高。</p>
+                                <p class="text-red-500 font-bold">【缺點】效率（0.58 KM/天）為全組最低。</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        Chart.register(ChartDataLabels);
+        window.onload = function() {
+            const labels = ['洪', '怡汝', '承翰', '美玲', '凱西'];
+            const lengths = [21.2, 13.3, 5.2, 4.0, 6.4];
+            const efficiency = [2.12, 1.11, 0.87, 0.80, 0.58];
+            const colors = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'];
+
+            // 圓餅圖
+            new Chart(document.getElementById('pieChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: lengths,
+                        backgroundColor: colors,
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        datalabels: {
+                            color: '#fff',
+                            font: { weight: 'bold', size: 14 },
+                            formatter: (value) => value + ' KM'
+                        }
+                    }
+                }
+            });
+
+            // 長條圖
+            new Chart(document.getElementById('barChart'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '效率 (KM/天)',
+                        data: efficiency,
+                        backgroundColor: colors,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true } },
+                    plugins: {
+                        legend: { display: false },
+                        datalabels: {
+                            anchor: 'end',
+                            align: 'top',
+                            color: '#1e293b',
+                            font: { weight: 'bold' },
+                            formatter: (value) => value
+                        }
+                    }
+                }
+            });
+        };
+    </script>
+</body>
+</html>
