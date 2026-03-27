@@ -79,25 +79,25 @@
 
     /* Light theme override */
     [data-theme="light"] {
-      --bg: #f0f2f5;
-      --surface: rgba(255, 255, 255, 0.85);
-      --surface-high: rgba(248, 249, 251, 0.95);
-      --surface-solid: #ffffff;
-      --border: rgba(0, 0, 0, 0.07);
-      --border-mid: rgba(0, 0, 0, 0.11);
-      --text: #1a1d23;
-      --text-muted: #8b95a5;
-      --text-sub: #5c6880;
-      --card-bg: rgba(255, 255, 255, 0.7);
-      --card-hover: rgba(192, 193, 255, 0.06);
-      --input-bg: rgba(0, 0, 0, 0.03);
-      --header-bg: rgba(240, 242, 245, 0.95);
-      --sidebar-bg: rgba(248, 249, 251, 0.98);
-      --accent-dim: rgba(100, 102, 200, 0.08);
-      --accent-border: rgba(100, 102, 200, 0.2);
-      --accent-glow: rgba(100, 102, 200, 0.1);
-      --accent: #6264c8;
-      --accent2: #4e50b0;
+      --bg: #e6e5e0;
+      --surface: rgba(242, 240, 235, 0.85);
+      --surface-high: rgba(248, 246, 242, 0.95);
+      --surface-solid: #f4f2ee;
+      --border: rgba(0, 0, 0, 0.08);
+      --border-mid: rgba(0, 0, 0, 0.15);
+      --text: #2c2b29;
+      --text-muted: #807d78;
+      --text-sub: #5c5a56;
+      --card-bg: rgba(250, 248, 245, 0.85);
+      --card-hover: rgba(0, 0, 0, 0.03);
+      --input-bg: rgba(0, 0, 0, 0.04);
+      --header-bg: rgba(235, 233, 228, 0.95);
+      --sidebar-bg: rgba(242, 240, 235, 0.98);
+      --accent-dim: rgba(94, 96, 163, 0.06);
+      --accent-border: rgba(94, 96, 163, 0.18);
+      --accent-glow: rgba(94, 96, 163, 0.1);
+      --accent: #5e60a3;
+      --accent2: #46488a;
     }
 
     * {
@@ -130,12 +130,24 @@
     }
 
     ::-webkit-scrollbar {
-      width: 3px;
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.1);
+      border-radius: 8px;
     }
 
     ::-webkit-scrollbar-thumb {
-      background: rgba(192, 193, 255, 0.15);
-      border-radius: 99px;
+      background: rgba(192, 193, 255, 0.25);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(192, 193, 255, 0.6);
+      box-shadow: 0 0 10px rgba(192, 193, 255, 0.3);
     }
 
     /* ── Loading ── */
@@ -710,6 +722,84 @@
       width: 100%;
     }
 
+    /* ── Brightness Control Slider (Space Tech Glow) ── */
+    #brightness-ctrl {
+      background: rgba(10, 10, 25, 0.6) !important;
+      border: 1px solid rgba(192, 193, 255, 0.15) !important;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 12px rgba(100, 150, 255, 0.1) !important;
+      backdrop-filter: blur(16px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+      transition: all 0.3s ease;
+    }
+    #brightness-ctrl:hover {
+      border-color: rgba(120, 160, 255, 0.4) !important;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 20px rgba(100, 150, 255, 0.2), inset 0 0 16px rgba(100, 150, 255, 0.15) !important;
+    }
+    #brightness-ctrl i {
+      color: rgba(150, 180, 255, 0.8) !important;
+      filter: drop-shadow(0 0 4px rgba(150, 180, 255, 0.6));
+    }
+    #map-brightness-val {
+      color: rgba(220, 230, 255, 0.9) !important;
+      text-shadow: 0 0 8px rgba(150, 180, 255, 0.6);
+    }
+    #map-brightness {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      background: rgba(20, 30, 50, 0.8);
+      border-radius: 99px;
+      outline: none;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+    }
+    #map-brightness::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 6px;
+      cursor: pointer;
+      background: linear-gradient(90deg, var(--accent) 0%, #a855f7 100%);
+      border-radius: 99px;
+      box-shadow: 0 0 8px rgba(192, 193, 255, 0.4), inset 0 0 4px rgba(255,255,255,0.2);
+    }
+    #map-brightness::-moz-range-track {
+      width: 100%;
+      height: 6px;
+      cursor: pointer;
+      background: linear-gradient(90deg, var(--accent) 0%, #a855f7 100%);
+      border-radius: 99px;
+      box-shadow: 0 0 8px rgba(192, 193, 255, 0.4), inset 0 0 4px rgba(255,255,255,0.2);
+    }
+    #map-brightness::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 14px;
+      width: 14px;
+      border-radius: 50%;
+      background: #fff;
+      cursor: pointer;
+      margin-top: -4px;
+      box-shadow: 0 0 10px rgba(255,255,255,0.8), 0 0 20px var(--accent);
+      border: 1px solid rgba(192, 193, 255, 0.5);
+      transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    #map-brightness::-moz-range-thumb {
+      height: 14px;
+      width: 14px;
+      border-radius: 50%;
+      background: #fff;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(255,255,255,0.8), 0 0 20px var(--accent);
+      border: 1px solid rgba(192, 193, 255, 0.5);
+      transition: transform 0.2s;
+    }
+    #map-brightness::-webkit-slider-thumb:hover {
+      transform: scale(1.3);
+      box-shadow: 0 0 15px #fff, 0 0 30px var(--accent);
+    }
+    #map-brightness::-moz-range-thumb:hover {
+      transform: scale(1.3);
+      box-shadow: 0 0 15px #fff, 0 0 30px var(--accent);
+    }
+
     /* ── Locate input ── */
     #locate-input {
       background: transparent;
@@ -757,11 +847,15 @@
       box-shadow: 0 0 12px rgba(192, 193, 255, 0.2);
     }
 
-    /* ── Highlight ── */
+    /* ── Highlight & Effects ── */
     .hl {
       background: rgba(192, 193, 255, 0.2);
       border-radius: 2px;
       color: var(--text);
+    }
+    
+    .space-glow-line {
+      filter: drop-shadow(0 0 4px rgba(60, 130, 255, 0.8)) drop-shadow(0 0 10px rgba(60, 130, 255, 0.5));
     }
 
     /* ── Donut ── */
@@ -1428,8 +1522,8 @@
         <i data-lucide="panel-left" style="width:17px;height:17px;"></i>
       </button>
       <div>
-        <div class="brand-title">花蓮人行道即時協作系統</div>
-        <div class="brand-sub">REALTIME · SPATIAL DATA COLLABORATION PLATFORM</div>
+        <div class="brand-title">花蓮人行道圖資協作系統</div>
+        <div class="brand-sub">INFRASTRUCTURE · GIS COLLABORATION PLATFORM</div>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
@@ -1569,11 +1663,11 @@
             style="padding:9px;font-size:10px;border:1px solid var(--accent-border);">1. 匯入 JSON</button>
           <button onclick="triggerFile('fi-png')" class="btn-accent"
             style="padding:9px;font-size:10px;border:1px solid var(--accent-border);">2. 上傳 PNG</button>
-          <button onclick="triggerFile('fi-geojson')"
+          <button onclick="triggerFile('fi-points')"
             style="grid-column:span 2;padding:9px;font-size:11px;font-weight:600;background:var(--accent-dim);border:1px solid var(--accent-border);color:var(--accent);border-radius:var(--radius-md);cursor:pointer;font-family:'Space Grotesk',sans-serif;transition:all .2s;"
             onmouseover="this.style.background='rgba(192,193,255,0.15)'"
             onmouseout="this.style.background='var(--accent-dim)'">
-            匯入點位圖層 (GeoJSON · 可多選批次上傳)
+            📍 匯入點位圖層（GeoJSON / CSV · 批次）
           </button>
           <button onclick="triggerFile('fi-kml')"
             style="grid-column:span 2;padding:9px;font-size:11px;font-weight:600;background:var(--green-dim);border:1px solid var(--green-border);color:var(--green);border-radius:var(--radius-md);cursor:pointer;font-family:'Space Grotesk',sans-serif;transition:all .2s;"
@@ -1583,7 +1677,7 @@
           </button>
           <input type="file" id="fi-json" class="hidden" accept=".json">
           <input type="file" id="fi-png" class="hidden" accept="image/png">
-          <input type="file" id="fi-geojson" class="hidden" accept=".geojson,.json" multiple>
+          <input type="file" id="fi-points" class="hidden" accept=".geojson,.json,.csv" multiple>
           <input type="file" id="fi-kml" class="hidden" accept=".kml,.kmz">
         </div>
         <div id="batch-progress-wrap">
@@ -1639,8 +1733,9 @@
           slider.addEventListener('input', e => {
             const val = parseFloat(e.target.value);
             valDisplay.innerText = Math.round(val * 100) + '%';
-            if (typeof tileLayer !== 'undefined' && tileLayer) {
-              tileLayer.setOpacity(val);
+            if (typeof map !== 'undefined' && map.getPane) {
+              const pane = map.getPane('tilePane');
+              if (pane) pane.style.filter = `brightness(${val})`;
             }
           });
         });
@@ -1817,6 +1912,48 @@
         style="width:100%;padding:12px;font-size:13px;font-weight:700;border:1px solid var(--accent-border);">確認儲存</button>
       <button onclick="closeModal()"
         style="width:100%;margin-top:7px;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:11px;font-weight:600;">取消</button>
+    </div>
+  </div>
+
+  <!-- CSV 欄位確認 Modal -->
+  <div id="modal-csv" class="modal-bg" style="display:none;">
+    <div class="modal-box" style="max-width:460px;">
+      <h3 style="font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;color:var(--text);margin-bottom:4px;">📊 CSV 匯入設定</h3>
+      <p id="csv-modal-enc" style="font-size:11px;color:var(--text-muted);margin-bottom:13px;">自動偵測編碼中…</p>
+      <!-- 名稱 -->
+      <div style="margin-bottom:11px;">
+        <div class="mono-label" style="letter-spacing:.1em;margin-bottom:5px;">圖層名稱</div>
+        <input id="csv-modal-name" type="text" style="width:100%;padding:9px 13px;font-size:14px;font-weight:700;" placeholder="輸入名稱...">
+      </div>
+      <!-- 座標欄位 -->
+      <div style="margin-bottom:11px;">
+        <div class="mono-label" style="letter-spacing:.1em;margin-bottom:8px;">座標欄位對應（EPSG:3826 → WGS84）</div>
+        <div style="display:flex;gap:8px;margin-bottom:7px;align-items:center;">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-muted);width:60px;flex-shrink:0;">東坐標 X</span>
+          <select id="csv-sel-x" style="flex:1;background:var(--input-bg);border:1px solid var(--border);color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:12px;padding:6px 10px;border-radius:var(--radius-md);"></select>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:7px;align-items:center;">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-muted);width:60px;flex-shrink:0;">北坐標 Y</span>
+          <select id="csv-sel-y" style="flex:1;background:var(--input-bg);border:1px solid var(--border);color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:12px;padding:6px 10px;border-radius:var(--radius-md);"></select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-muted);width:60px;flex-shrink:0;">高程 Z<br><span style="font-size:9px;opacity:.6;">(選填)</span></span>
+          <select id="csv-sel-z" style="flex:1;background:var(--input-bg);border:1px solid var(--border);color:var(--text-muted);font-family:'JetBrains Mono',monospace;font-size:12px;padding:6px 10px;border-radius:var(--radius-md);"></select>
+        </div>
+      </div>
+      <!-- 期別 -->
+      <div style="margin-bottom:13px;">
+        <div class="mono-label" style="letter-spacing:.1em;margin-bottom:6px;">期別（可覆蓋自動分類）</div>
+        <div style="display:flex;gap:6px;">
+          <button class="period-select-btn" data-p="" onclick="selectModalPeriod('')" style="flex:1;padding:7px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;transition:all .2s;text-transform:uppercase;">AUTO</button>
+          <button class="period-select-btn" data-p="初" onclick="selectModalPeriod('初')" style="flex:1;padding:7px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;transition:all .2s;">初</button>
+          <button class="period-select-btn" data-p="中" onclick="selectModalPeriod('中')" style="flex:1;padding:7px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;transition:all .2s;">中</button>
+          <button class="period-select-btn" data-p="末" onclick="selectModalPeriod('末')" style="flex:1;padding:7px;border-radius:var(--radius-md);border:1px solid var(--border);background:var(--input-bg);color:var(--text-muted);cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;transition:all .2s;">末</button>
+        </div>
+      </div>
+      <div id="csv-modal-status" style="display:none;padding:8px;background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:var(--radius-md);color:var(--amber);font-size:11px;font-weight:600;margin-bottom:9px;">上傳中...</div>
+      <button id="csv-modal-confirm" onclick="doCSVUpload()" class="btn-accent" style="width:100%;padding:12px;font-size:13px;font-weight:700;border:1px solid var(--accent-border);">確認轉換並上傳</button>
+      <button onclick="closeCSVModal()" style="width:100%;margin-top:7px;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:11px;font-weight:600;">取消</button>
     </div>
   </div>
 
@@ -2186,8 +2323,14 @@
     const BLANK = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJgCC==';
     function buildTile(dark) {
       const slider = document.getElementById('map-brightness');
-      const op = slider ? parseFloat(slider.value) : (dark ? 0.85 : 1);
-      return L.tileLayer(dark ? NLSC_DARK : NLSC_URL, { maxZoom: 19, tileSize: 256, crossOrigin: true, errorTileUrl: BLANK, opacity: op, attribution: '© 國土測繪中心' });
+      const val = slider ? parseFloat(slider.value) : (dark ? 0.85 : 1);
+      
+      if (typeof map !== 'undefined' && map.getPane) {
+        const pane = map.getPane('tilePane');
+        if (pane) pane.style.filter = `brightness(${val})`;
+      }
+      
+      return L.tileLayer(dark ? NLSC_DARK : NLSC_URL, { maxZoom: 19, tileSize: 256, crossOrigin: true, errorTileUrl: BLANK, opacity: 1, attribution: '© 國土測繪中心' });
     }
     function toggleTheme() {
       isDark = !isDark;
@@ -2506,7 +2649,7 @@
       const mergedGJ = { type: 'FeatureCollection', features: allFeatures }; const btn = document.getElementById('btn-preview'); btn.innerHTML = '<span class="kml-spinner"></span> 計算中…'; btn.disabled = true; setRoadStatus('⏳ 計算中…');
       (async function () { try { const res = await fetch(EDGE_BASE + '/diff_lines_by_markers', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY }, body: JSON.stringify({ lines: mergedGJ }) }); if (!res.ok) throw new Error('HTTP ' + res.status); const result = await res.json(); const diffGJ = result.geojson || result; if (!diffGJ || !diffGJ.features) throw new Error('格式錯誤'); showDiffResult(mergedGJ, diffGJ); toast('預覽完成', 'success'); } catch (err) { console.warn('Edge Function 未連線，使用前端模擬:', err.message); frontendDiffFallback(mergedGJ); } btn.innerHTML = '⚡ 預覽消除'; btn.disabled = false; })();
     }
-    function showDiffResult(origGJ, diffGJ) { if (kmlDiffLayer) { map.removeLayer(kmlDiffLayer); kmlDiffLayer = null; } kmlDiffLayer = L.geoJSON(diffGJ, { style: { color: 'var(--accent)', weight: 3, opacity: 0.95 } }).addTo(map); const cnt = diffGJ.features.length; const orig = calcTotalLength(origGJ); const pct = orig > 0 ? Math.round((1 - calcTotalLength(diffGJ) / orig) * 100) : 0; const origKm = calcTotalLengthKm(origGJ); const remKm = calcTotalLengthKm(diffGJ); const remKmStr = remKm >= 1 ? remKm.toFixed(2) + ' km' : (remKm * 1000).toFixed(0) + ' m'; const origKmStr = origKm >= 1 ? origKm.toFixed(2) + ' km' : (origKm * 1000).toFixed(0) + ' m'; document.getElementById('diff-stat').innerHTML = '剩餘 ' + cnt + ' 段 \u00a0<span style="font-family:\'JetBrains Mono\',monospace;font-size:11px;font-weight:700;color:var(--accent);">' + remKmStr + '</span><br><span style="font-size:9px;color:var(--text-muted);">原始 ' + origKmStr + '\u30fb消除 ' + pct + '%</span>'; setRoadStatus('\u2705 預覽完成（不儲存）'); document.getElementById('btn-clear-diff').style.display = 'block'; }
+    function showDiffResult(origGJ, diffGJ) { if (kmlDiffLayer) { map.removeLayer(kmlDiffLayer); kmlDiffLayer = null; } kmlDiffLayer = L.geoJSON(diffGJ, { style: { color: '#1e40af', weight: 4, opacity: 1, className: 'space-glow-line' } }).addTo(map); const cnt = diffGJ.features.length; const orig = calcTotalLength(origGJ); const pct = orig > 0 ? Math.round((1 - calcTotalLength(diffGJ) / orig) * 100) : 0; const origKm = calcTotalLengthKm(origGJ); const remKm = calcTotalLengthKm(diffGJ); const remKmStr = remKm >= 1 ? remKm.toFixed(2) + ' km' : (remKm * 1000).toFixed(0) + ' m'; const origKmStr = origKm >= 1 ? origKm.toFixed(2) + ' km' : (origKm * 1000).toFixed(0) + ' m'; document.getElementById('diff-stat').innerHTML = '剩餘 ' + cnt + ' 段 \u00a0<span style="font-family:\'JetBrains Mono\',monospace;font-size:11px;font-weight:700;color:var(--accent);">' + remKmStr + '</span><br><span style="font-size:9px;color:var(--text-muted);">原始 ' + origKmStr + '\u30fb消除 ' + pct + '%</span>'; setRoadStatus('\u2705 預覽完成（不儲存）'); document.getElementById('btn-clear-diff').style.display = 'block'; }
     function frontendDiffFallback(origGJ) { toast('Edge Function 未連線，前端模擬', 'warn'); const pts = []; assets.forEach(function (a) { if (a.type === 'point' && a._rawFeatures) { a._rawFeatures.forEach(function (f) { let lat = null, lng = null; if (f.geometry && f.geometry.coordinates) { const cx = parseFloat(f.geometry.coordinates[0]), cy = parseFloat(f.geometry.coordinates[1]); if (looksWGS84(cx, cy)) { lng = cx; lat = cy; } else { const w = to84(cx, cy); lng = w[0]; lat = w[1]; } } if (lat !== null) pts.push([lng, lat]); }); } }); const THRESH = 0.0001617; const resultFeatures = []; (origGJ.features || []).forEach(function (f) { const geom = f.geometry; if (!geom) return; const coords = geom.type === 'LineString' ? [geom.coordinates] : (geom.coordinates || []); coords.forEach(function (ring) { let seg = []; ring.forEach(function (pt) { const near = pts.some(function (p) { return Math.hypot(pt[0] - p[0], pt[1] - p[1]) < THRESH; }); if (!near) { seg.push(pt); } else { if (seg.length >= 2) resultFeatures.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: seg.slice() }, properties: {} }); seg = []; } }); if (seg.length >= 2) resultFeatures.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: seg }, properties: {} }); }); }); const diffGJ = { type: 'FeatureCollection', features: resultFeatures }; showDiffResult(origGJ, diffGJ); setRoadStatus('\u26a0\ufe0f 前端模擬'); }
     function clearDiff() { if (kmlDiffLayer) { map.removeLayer(kmlDiffLayer); kmlDiffLayer = null; } document.getElementById('diff-stat').textContent = '開啟圖層後可預覽'; document.getElementById('btn-clear-diff').style.display = 'none'; setRoadStatus('', false); toast('已清除消除預覽', 'info'); }
     function renderKmlSidebarList() {
@@ -2588,12 +2731,12 @@
         .subscribe((status, err) => { rtSetState(status); rtLog('RT 狀態 → ' + status, status === 'SUBSCRIBED' ? '#4edea3' : status === 'CHANNEL_ERROR' ? '#ff6b7a' : '#ffb95f'); if (err) rtLog('RT 錯誤: ' + JSON.stringify(err), '#ff6b7a'); if (status === 'SUBSCRIBED') { _rtConnected = true; clearTimeout(rtTimeout); if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; rtLog('✓ RT 已連線，停止輪詢', '#4edea3'); } } if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') { _rtConnected = false; if (!_pollTimer) { rtLog('RT 中斷，啟動輪詢 fallback', '#ffb95f'); startPolling(4000); } } });
     }
     function addAsset(row, sd) { if (assets.has(row.id)) return; row.type === 'img' ? addImg(row, sd) : addPts(row, sd); }
-    function addImg(row, sd) { if (assets.has(row.id)) return; const b = row.bounds_json; if (b.w == null || b.e == null || b.s == null || b.n == null) return; const sw = to84(b.w, b.s), ne = to84(b.e, b.n); function mkBounds() { return L.latLngBounds(L.latLng(sw[1], sw[0]), L.latLng(ne[1], ne[0])); } const overlay = L.imageOverlay(row.img_url || row.img_data || '', mkBounds(), { opacity: 0.85, interactive: false }).addTo(map); const rect = L.rectangle(mkBounds(), { color: sColor(sd?.status), weight: 2, fill: false, interactive: true }).addTo(map); rect.bindTooltip(row.display_name, { className: 'tt', sticky: true, permanent: false }); const fn = () => openPanel(row.id); rect.on('click', fn); assets.set(row.id, { type: 'img', rect, overlay, mkBounds, _clickHandler: fn, name: row.display_name, display_name: row.display_name, statusData: sd, manual_period: row.manual_period || '' }); }
+    function addImg(row, sd) { if (assets.has(row.id)) return; const b = row.bounds_json; if (b.w == null || b.e == null || b.s == null || b.n == null) return; const sw = to84(b.w, b.s), ne = to84(b.e, b.n); function mkBounds() { return L.latLngBounds(L.latLng(sw[1], sw[0]), L.latLng(ne[1], ne[0])); } const overlay = L.imageOverlay(row.img_url || row.img_data || '', mkBounds(), { opacity: 0.85, interactive: false }).addTo(map); const rect = L.rectangle(mkBounds(), { color: sColor(sd?.status), weight: 2, fill: false, interactive: true }).addTo(map); rect.bindTooltip(row.display_name, { className: 'tt', sticky: true, permanent: false }); const fn = () => openPanel(row.id); rect.on('click', fn); rect.on('mouseover', () => rect.setStyle({ color: '#8de8ff', weight: 4 })); rect.on('mouseout', () => rect.setStyle({ color: sColor(sd?.status), weight: 2 })); assets.set(row.id, { type: 'img', rect, overlay, mkBounds, _clickHandler: fn, name: row.display_name, display_name: row.display_name, statusData: sd, manual_period: row.manual_period || '' }); }
     function parseDMS(val) { if (val == null) return null; if (typeof val === 'number') return isNaN(val) ? null : val; const s = String(val).trim(); if (/^-?[\d.]+$/.test(s)) return parseFloat(s); const parts = s.match(/[\d.]+/g); if (!parts || parts.length < 2) return null; return parseFloat(parts[0]) + parseFloat(parts[1]) / 60 + parseFloat(parts[2] || 0) / 3600; }
     function addPts(row, sd) {
       const group = L.featureGroup().addTo(map); const color = sColor(sd?.status || 'none'); let loaded = false;
       async function ensureLoaded() { if (loaded) return; loaded = true; let features = []; if (row.points_url) { try { const res = await fetch(row.points_url); const json = await res.json(); if (Array.isArray(json)) features = json; else if (json?.type === 'FeatureCollection') features = json.features || []; else if (json?.type === 'Feature') features = [json]; } catch (e) { console.warn('[addPts]', e); } } else if (row.points_json) { const raw = row.points_json; if (Array.isArray(raw)) features = raw; else if (raw?.type === 'FeatureCollection') features = raw.features || []; else if (raw?.type === 'Feature') features = [raw]; } features.forEach(f => { let lat = null, lng = null; if (f.geometry?.coordinates) { const cx = parseFloat(f.geometry.coordinates[0]), cy = parseFloat(f.geometry.coordinates[1]); if (!isNaN(cx) && !isNaN(cy)) { if (looksWGS84(cx, cy)) { lng = cx; lat = cy; } else { const w = to84(cx, cy); lng = w[0]; lat = w[1]; } } } if (lat === null) { const p = f.properties || {}; const pLat = parseDMS(p['緯度'] ?? p['lat'] ?? p['latitude']); const pLng = parseDMS(p['經度'] ?? p['lng'] ?? p['longitude']); if (pLat !== null && pLng !== null && pLat > 20 && pLat < 30 && pLng > 100 && pLng < 130) { lat = pLat; lng = pLng; } } if (lat !== null && lng !== null) { const marker = L.circleMarker([lat, lng], { radius: 7, fillColor: color, color: color, weight: 0, fillOpacity: 1, renderer: canvasRenderer }).addTo(group); const label = getStdProps(f.properties || {}).POINT_NAME || null; if (label) marker.bindTooltip(label, { className: 'tt', sticky: true, permanent: false }); } }); const a = assets.get(row.id); if (a) { a._rawFeatures = features; const gb = group.getBounds(); if (gb.isValid()) a.mkBounds = () => gb; } }
-      group.bindTooltip(row.display_name, { className: 'tt', sticky: true }); const fn = () => { ensureLoaded(); openPanel(row.id); }; group.on('click', fn);
+      group.bindTooltip(row.display_name, { className: 'tt', sticky: true }); const fn = () => { ensureLoaded(); openPanel(row.id); }; group.on('click', fn); group.on('mouseover', () => group.eachLayer(l => l.setStyle({ color: '#8de8ff', weight: 4, radius: 9 }))); group.on('mouseout', () => group.eachLayer(l => l.setStyle({ color: sColor(sd?.status || 'none'), weight: 0, radius: 7 })));
       assets.set(row.id, { type: 'point', visual: group, mkBounds: null, _clickHandler: fn, _ensureLoaded: ensureLoaded, name: row.display_name, display_name: row.display_name, statusData: sd, _rawFeatures: [], manual_period: row.manual_period || '' }); ensureLoaded();
     }
     function removeLayer(id) { const a = assets.get(id); if (!a) return; if (a.type === 'img') { map.removeLayer(a.rect); map.removeLayer(a.overlay); } else map.removeLayer(a.visual); assets.delete(id); }
@@ -2711,14 +2854,248 @@
     function triggerFile(id) { document.getElementById(id).click(); }
     document.getElementById('fi-json').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { pendingJson = JSON.parse(await f.text()); toast('JSON 已讀取', 'success'); } catch { alert('JSON 解析失敗'); } e.target.value = ''; };
     document.getElementById('fi-png').onchange = e => { const f = e.target.files[0]; if (!f) return; if (!pendingJson) return alert('請先匯入 JSON'); const r = new FileReader(); r.onload = ev => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); let w = img.width, h = img.height, max = 1600; if (w > max || h > max) { if (w > h) { h = max / w * h; w = max; } else { w = max / h * w; h = max; } } canvas.width = w; canvas.height = h; canvas.getContext('2d').drawImage(img, 0, 0, w, h); let q = 0.9, res = canvas.toDataURL('image/png'); while (res.length > 1000000 && q > 0.1) { res = canvas.toDataURL('image/jpeg', q); q -= 0.1; } pendingImg = res; pendingManualPeriod = ''; selectModalPeriod(''); document.getElementById('modal-name').value = pendingJson.name || f.name.split('.')[0]; document.getElementById('modal-title').innerText = '儲存 PNG 圖層'; document.getElementById('modal-save').style.display = 'flex'; }; img.src = ev.target.result; }; r.readAsDataURL(f); e.target.value = ''; };
-    document.getElementById('fi-geojson').onchange = async e => {
+
+    // 定義 EPSG:3826 TWD97 TM2 Zone 121
+    proj4.defs('EPSG:3826', '+proj=tmerc +lat_0=0 +lon_0=121 +k=0.9999 +x_0=250000 +y_0=0 +ellps=GRS80 +units=m +no_defs');
+
+    let _csvPendingFiles = [];   // 待處理的 File 物件列表
+    let _csvParsedData  = null;  // { headers, rows, text, enc } 預先解析的第一個 CSV
+
+    // 讀取 ArrayBuffer
+    function _csvReadBytes(file) {
+      return new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload  = e => res(new Uint8Array(e.target.result));
+        r.onerror = () => rej(new Error('讀取失敗'));
+        r.readAsArrayBuffer(file);
+      });
+    }
+
+    // 自動偵測編碼並解碼
+    async function _csvDecode(file) {
+      const bytes = await _csvReadBytes(file);
+      const tryDec = cs => { try { return new TextDecoder(cs, { fatal: true }).decode(bytes); } catch { return null; } };
+      const u = tryDec('utf-8'); if (u) return { text: u, enc: 'UTF-8' };
+      const c = tryDec('cp950') || tryDec('big5');
+      if (c) return { text: c, enc: 'CP950/Big5' };
+      throw new Error('無法判斷編碼，請確認檔案格式');
+    }
+
+    // 解析 CSV（支援引號跳脫）
+    function _parseCSV(raw) {
+      const rows = []; let cur = [''], ci = 0, inQ = false, prev = '';
+      for (const ch of raw) {
+        if (ch === '"') { if (inQ && ch === prev) cur[ci] += ch; inQ = !inQ; }
+        else if (ch === ',' && !inQ) cur[++ci] = '';
+        else if ((ch === '\n' || ch === '\r') && !inQ) { if (ch === '\n') { rows.push(cur); cur = ['']; ci = 0; } }
+        else cur[ci] += ch;
+        prev = ch;
+      }
+      if (cur.join('').trim() !== '') rows.push(cur);
+      return rows;
+    }
+
+    // 自動偵測 X/Y/Z 欄位
+    function _autoXYZ(headers) {
+      const xHints = ['東坐標','东坐标','easting','x坐標','x坐标','x_coord','twd97x','x'];
+      const yHints = ['北坐標','北坐标','northing','y坐標','y坐标','y_coord','twd97y','y'];
+      const zHints = ['高程','elevation','大地高','height','alt','z'];
+      const pick = hints => {
+        for (const h of hints) { const f = headers.find(x => x.trim().toLowerCase() === h.toLowerCase()); if (f) return f; }
+        for (const h of hints) { const f = headers.find(x => x.trim().toLowerCase().includes(h.toLowerCase())); if (f) return f; }
+        return null;
+      };
+      return { x: pick(xHints), y: pick(yHints), z: pick(zHints) };
+    }
+
+    // 填充欄位下拉（含可選高程 Z）
+    function _buildCSVSelectors(headers, xDef, yDef, zDef) {
+      const sx = document.getElementById('csv-sel-x');
+      const sy = document.getElementById('csv-sel-y');
+      const sz = document.getElementById('csv-sel-z');
+      sx.innerHTML = sy.innerHTML = sz.innerHTML = '';
+      const none = document.createElement('option'); none.value = ''; none.textContent = '（不使用）'; sz.appendChild(none);
+      headers.forEach(h => {
+        [sx, sy, sz].forEach(s => {
+          const o = document.createElement('option'); o.value = h; o.textContent = h; s.appendChild(o);
+        });
+      });
+      if (xDef) sx.value = xDef;
+      if (yDef) sy.value = yDef;
+      sz.value = zDef || '';
+    }
+
+    // 統一點位入口：同時接受 GeoJSON + CSV，支援批次
+    document.getElementById('fi-points').onchange = async e => {
       const files = [...e.target.files]; e.target.value = ''; if (!files.length) return;
-      if (files.length === 1) { try { const json = JSON.parse(await files[0].text()); pendingPoints = json.features || (Array.isArray(json) ? json : [json]); pendingManualPeriod = ''; selectModalPeriod(''); document.getElementById('modal-name').value = files[0].name.split('.')[0]; document.getElementById('modal-title').innerText = '儲存點位'; document.getElementById('modal-save').style.display = 'flex'; } catch { alert('GeoJSON 解析失敗'); } return; }
-      const wrap = document.getElementById('batch-progress-wrap'); const fillEl = document.getElementById('batch-fill'); const labelEl = document.getElementById('batch-label'); const pctEl = document.getElementById('batch-pct'); const detailEl = document.getElementById('batch-detail'); const toolsWrap = document.getElementById('tools-wrap'); if (toolsWrap.classList.contains('closed')) { toolsWrap.classList.remove('closed'); document.getElementById('fold-icon').style.transform = 'rotate(0deg)'; } wrap.classList.add('show');
-      const uName = document.getElementById('user-select').value; let done = 0, failed = 0;
-      for (let i = 0; i < files.length; i++) { const f = files[i]; const name = f.name.replace(/\.(geojson|json)$/i, ''); labelEl.textContent = `上傳中 (${i + 1}/${files.length})：${name}`; pctEl.textContent = Math.round((i / files.length) * 100) + '%'; fillEl.style.width = Math.round((i / files.length) * 100) + '%'; try { const json = JSON.parse(await f.text()); const features = json.features || (Array.isArray(json) ? json : [json]); const geojson = { type: 'FeatureCollection', features }; const fname = Date.now() + '_' + i + '.geojson'; const blob = new Blob([JSON.stringify(geojson)], { type: 'application/geo+json' }); let pointsUrl = null; const { error: pse } = await sb.storage.from('asset-points').upload(fname, blob, { contentType: 'application/geo+json', upsert: false }); if (!pse) pointsUrl = sb.storage.from('asset-points').getPublicUrl(fname).data.publicUrl; const manualP = pendingManualPeriod || null; const { data: row, error: dbe } = await sb.from('assets').insert({ display_name: name, type: 'point', points_url: pointsUrl || null, points_json: pointsUrl ? null : features, manual_period: manualP }).select().single(); if (dbe) throw dbe; await writeAudit(row?.id, name, 'created', uName, null, name); done++; } catch (err) { failed++; detailEl.textContent = `❌ ${name} 失敗：${err.message}`; } }
-      fillEl.style.width = '100%'; pctEl.textContent = '100%'; labelEl.textContent = `完成！成功 ${done} 個${failed ? `，失敗 ${failed} 個` : ''}`; detailEl.textContent = ''; toast(`批次上傳完成：${done} 個成功${failed ? `，${failed} 個失敗` : ''}`, failed ? 'warn' : 'success'); setTimeout(() => wrap.classList.remove('show'), 4000);
+      const isCsv = f => /\.csv$/i.test(f.name);
+      const isGeo = f => /\.(geojson|json)$/i.test(f.name);
+      const csvFiles = files.filter(isCsv);
+      const geoFiles = files.filter(isGeo);
+
+      // 全部是 GeoJSON → 原有邏輯
+      if (!csvFiles.length && geoFiles.length) {
+        if (geoFiles.length === 1) {
+          try { const json = JSON.parse(await geoFiles[0].text()); pendingPoints = json.features || (Array.isArray(json) ? json : [json]); pendingManualPeriod = ''; selectModalPeriod(''); document.getElementById('modal-name').value = geoFiles[0].name.split('.')[0]; document.getElementById('modal-title').innerText = '儲存點位'; document.getElementById('modal-save').style.display = 'flex'; } catch { alert('GeoJSON 解析失敗'); } return;
+        }
+        await _batchUploadFiles(geoFiles, null, null, null);
+        return;
+      }
+
+      // 含 CSV → 偵測欄位，開 Modal
+      _csvPendingFiles = files;
+      _csvParsedData   = null;
+      try {
+        const { text, enc } = await _csvDecode(csvFiles[0]);
+        const rows    = _parseCSV(text);
+        if (rows.length < 2) { toast('CSV 無資料行', 'error'); return; }
+        const headers = rows[0].map(h => h.trim());
+        const { x, y, z } = _autoXYZ(headers);
+        _csvParsedData = { headers, rows, text, enc };
+        _buildCSVSelectors(headers, x, y, z);
+        const name0 = csvFiles[0].name.replace(/\.csv$/i, '');
+        const total = `${csvFiles.length} 個 CSV${geoFiles.length ? ' + ' + geoFiles.length + ' 個 GeoJSON' : ''}`;
+        document.getElementById('csv-modal-name').value = files.length === 1 ? name0 : '';
+        document.getElementById('csv-modal-enc').textContent = `共 ${total} · 編碼：${enc} · 座標系：EPSG:3826 → WGS84`;
+        pendingManualPeriod = ''; selectModalPeriod('');
+        document.getElementById('csv-modal-status').style.display = 'none';
+        document.getElementById('modal-csv').style.display = 'flex';
+      } catch (err) { toast('CSV 讀取失敗：' + err.message, 'error'); }
     };
+
+    function closeCSVModal() {
+      document.getElementById('modal-csv').style.display = 'none';
+      _csvPendingFiles = []; _csvParsedData = null;
+    }
+
+    // 單一 CSV → GeoJSON features（支援高程 Z）
+    function _csvTextToFeatures(text, headers, xField, yField, zField) {
+      const rows = _parseCSV(text);
+      const xi = headers.indexOf(xField), yi = headers.indexOf(yField);
+      const zi = zField ? headers.indexOf(zField) : -1;
+      if (xi < 0 || yi < 0) throw new Error(`找不到欄位 "${xField}" 或 "${yField}"`);
+      const features = []; let skipped = 0;
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.length === 1 && row[0].trim() === '') continue;
+        const x = parseFloat(row[xi]), y = parseFloat(row[yi]);
+        if (isNaN(x) || isNaN(y)) { skipped++; continue; }
+        const [lng, lat] = proj4('EPSG:3826', 'WGS84', [x, y]);
+        const zv = (zi >= 0 && row[zi]) ? parseFloat(row[zi]) : NaN;
+        const coords = !isNaN(zv) ? [lng, lat, zv] : [lng, lat];
+        const props = {}; headers.forEach((h, j) => { props[h] = row[j] !== undefined ? row[j].trim() : ''; });
+        features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: coords }, properties: props });
+      }
+      return { features, skipped };
+    }
+
+    // Modal 確認：上傳（單檔 or 批次，支援 GeoJSON+CSV 混合）
+    async function doCSVUpload() {
+      const name    = document.getElementById('csv-modal-name').value.trim();
+      const xField  = document.getElementById('csv-sel-x').value;
+      const yField  = document.getElementById('csv-sel-y').value;
+      const zField  = document.getElementById('csv-sel-z').value;  // 可空
+      const uName   = document.getElementById('user-select').value;
+      const st      = document.getElementById('csv-modal-status');
+      const btn     = document.getElementById('csv-modal-confirm');
+      btn.disabled  = true; st.style.display = 'block'; st.textContent = '轉換中…';
+
+      const files   = _csvPendingFiles;
+
+      // 多檔（批次）模式，或單純單檔
+      if (files.length > 1 || !name) {
+        closeCSVModal();
+        await _batchUploadFiles(files, xField, yField, zField);
+        return;
+      }
+
+      // 單檔模式
+      const f = files[0];
+      const isCsv = /\.csv$/i.test(f.name);
+      try {
+        if (isCsv) {
+          const { text } = await _csvDecode(f);
+          const { features, skipped } = _csvTextToFeatures(text, _csvParsedData.headers, xField, yField, zField);
+          if (!features.length) throw new Error('無有效座標資料');
+          if (skipped) toast(`略過 ${skipped} 筆無效座標`, 'warn');
+          st.textContent = '上傳至 Storage…';
+          await _uploadGeoJSONfeatures(features, name, uName, pendingManualPeriod || null);
+          toast(`CSV 點位已上傳 ✓（${features.length} 點）`, 'success');
+        } else {
+          const json = JSON.parse(await f.text());
+          const features = json.features || (Array.isArray(json) ? json : [json]);
+          st.textContent = '上傳至 Storage…';
+          await _uploadGeoJSONfeatures(features, name, uName, pendingManualPeriod || null);
+          toast(`GeoJSON 點位已上傳 ✓（${features.length} 點）`, 'success');
+        }
+        closeCSVModal();
+      } catch (err) {
+        st.textContent = '❌ ' + err.message;
+        btn.disabled = false;
+      }
+    }
+
+    // 批次上傳（混合 GeoJSON + CSV，CSV 需要 xField/yField/zField 參數）
+    async function _batchUploadFiles(files, xField, yField, zField) {
+      const wrap = document.getElementById('batch-progress-wrap');
+      const fillEl = document.getElementById('batch-fill');
+      const labelEl = document.getElementById('batch-label');
+      const pctEl  = document.getElementById('batch-pct');
+      const detailEl = document.getElementById('batch-detail');
+      const toolsWrap = document.getElementById('tools-wrap');
+      if (toolsWrap.classList.contains('closed')) { toolsWrap.classList.remove('closed'); document.getElementById('fold-icon').style.transform = 'rotate(0deg)'; }
+      wrap.classList.add('show');
+      const uName = document.getElementById('user-select').value;
+      let done = 0, failed = 0;
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        const n = f.name.replace(/\.(geojson|json|csv)$/i, '');
+        labelEl.textContent = `上傳中 (${i + 1}/${files.length})：${n}`;
+        pctEl.textContent   = Math.round((i / files.length) * 100) + '%';
+        fillEl.style.width  = Math.round((i / files.length) * 100) + '%';
+        try {
+          let features;
+          if (/\.csv$/i.test(f.name)) {
+            const { text } = await _csvDecode(f);
+            const hdrs = _parseCSV(text)[0].map(h => h.trim());
+            const res  = _csvTextToFeatures(text, hdrs, xField, yField, zField);
+            if (!res.features.length) throw new Error('無有效座標');
+            if (res.skipped) toast(`${n}：略過 ${res.skipped} 筆`, 'warn');
+            features = res.features;
+          } else {
+            const json = JSON.parse(await f.text());
+            features = json.features || (Array.isArray(json) ? json : [json]);
+          }
+          await _uploadGeoJSONfeatures(features, n, uName, pendingManualPeriod || null);
+          done++;
+        } catch (err) { failed++; detailEl.textContent = `❌ ${n} 失敗：${err.message}`; }
+      }
+      fillEl.style.width = '100%'; pctEl.textContent = '100%';
+      labelEl.textContent = `完成！成功 ${done} 個${failed ? `，失敗 ${failed} 個` : ''}`;
+      detailEl.textContent = '';
+      toast(`批次上傳完成：${done} 個成功${failed ? `，${failed} 個失敗` : ''}`, failed ? 'warn' : 'success');
+      setTimeout(() => wrap.classList.remove('show'), 4000);
+    }
+
+    // 共用：上傳 GeoJSON features 到 Storage + 資料庫
+    async function _uploadGeoJSONfeatures(features, name, uName, manualP) {
+      const geojson = { type: 'FeatureCollection', features };
+      const fname   = Date.now() + '_' + name.replace(/[^a-zA-Z0-9_-]/g, '_') + '.geojson';
+      const blob    = new Blob([JSON.stringify(geojson)], { type: 'application/geo+json' });
+      let pointsUrl = null;
+      const { error: pse } = await sb.storage.from('asset-points').upload(fname, blob, { contentType: 'application/geo+json', upsert: false });
+      if (!pse) pointsUrl = sb.storage.from('asset-points').getPublicUrl(fname).data.publicUrl;
+      const { data: row, error: dbe } = await sb.from('assets').insert({
+        display_name: name, type: 'point',
+        points_url:  pointsUrl || null,
+        points_json: pointsUrl ? null : features,
+        manual_period: manualP || null
+      }).select().single();
+      if (dbe) throw dbe;
+      await writeAudit(row?.id, name, 'created', uName, null, name);
+    }
+    // ── END CSV ────────────────────────────────────────────────────────
+
     async function doUpload() {
       const name = document.getElementById('modal-name').value.trim(); if (!name) return; const btn = document.getElementById('modal-confirm'), st = document.getElementById('modal-status'); btn.disabled = true; st.style.display = 'block'; const uName = document.getElementById('user-select').value;
       try {
