@@ -722,6 +722,14 @@
       width: 100%;
     }
 
+    /* Darken pane: sits above tiles, below markers, no interaction */
+    .leaflet-darken-pane {
+      pointer-events: none !important;
+    }
+    .leaflet-darken-pane path {
+      pointer-events: none !important;
+    }
+
     /* ── Brightness Control Slider (Space Tech Glow) ── */
     #brightness-ctrl {
       background: rgba(10, 10, 25, 0.6) !important;
@@ -1733,10 +1741,7 @@
           slider.addEventListener('input', e => {
             const val = parseFloat(e.target.value);
             valDisplay.innerText = Math.round(val * 100) + '%';
-            if (typeof map !== 'undefined' && map.getPane) {
-              const pane = map.getPane('tilePane');
-              if (pane) pane.style.filter = `brightness(${val})`;
-            }
+            if (typeof applyBrightness === 'function') applyBrightness(val);
           });
         });
       </script>
@@ -2321,26 +2326,35 @@
     const NLSC_URL = 'https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}';
     const NLSC_DARK = 'https://wmts.nlsc.gov.tw/wmts/EMAP5/default/GoogleMapsCompatible/{z}/{y}/{x}';
     const BLANK = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJgCC==';
+    function applyBrightness(val) {
+      if (typeof map === 'undefined' || !map.getPane) return;
+      const pane = map.getPane('tilePane');
+      if (pane) pane.style.filter = `brightness(${val})`;
+    }
+    // Session-unique cache buster — forces fresh tile requests, avoids NLSC CDN returning wrong cached tiles
+    const _TILE_VER = Date.now();
     function buildTile(dark) {
-      const slider = document.getElementById('map-brightness');
-      const val = slider ? parseFloat(slider.value) : (dark ? 0.85 : 1);
-      
-      if (typeof map !== 'undefined' && map.getPane) {
-        const pane = map.getPane('tilePane');
-        if (pane) pane.style.filter = `brightness(${val})`;
-      }
-      
-      return L.tileLayer(dark ? NLSC_DARK : NLSC_URL, { maxZoom: 19, tileSize: 256, crossOrigin: true, errorTileUrl: BLANK, opacity: 1, attribution: '© 國土測繪中心' });
+      const baseUrl = dark ? NLSC_DARK : NLSC_URL;
+      return L.tileLayer(`${baseUrl}?v=${_TILE_VER}`, {
+        maxZoom: 19,
+        tileSize: 256,
+        crossOrigin: true,
+        errorTileUrl: BLANK,
+        opacity: 1,
+        attribution: '\u00a9 \u570b\u571f\u6e2c\u7e6a\u4e2d\u5fc3'
+      });
     }
     function toggleTheme() {
       isDark = !isDark;
       document.documentElement.setAttribute('data-theme', isDark ? '' : 'light');
       document.getElementById('theme-icon').setAttribute('data-lucide', isDark ? 'moon' : 'sun');
       const slider = document.getElementById('map-brightness');
+      const newVal = isDark ? 0.85 : 1;
       if (slider) {
-        slider.value = isDark ? 0.85 : 1;
-        document.getElementById('map-brightness-val').innerText = (slider.value * 100) + '%';
+        slider.value = newVal;
+        document.getElementById('map-brightness-val').innerText = Math.round(newVal * 100) + '%';
       }
+      applyBrightness(newVal);
       if (tileLayer) map.removeLayer(tileLayer);
       tileLayer = buildTile(isDark).addTo(map);
       lucide.createIcons();
@@ -2675,6 +2689,17 @@
     async function init() {
       map = L.map('map', { zoomControl: false, attributionControl: true }).setView([23.975, 121.605], 14);
       tileLayer = buildTile(true).addTo(map); L.control.zoom({ position: 'topright' }).addTo(map);
+      // KEY FIX: remove tilePane filter during zoom to prevent GPU compositing tearing
+      // then restore it after zoom completes
+      map.on('zoomstart', function() {
+        const pane = map.getPane('tilePane');
+        if (pane) { pane._brightnessFilter = pane.style.filter; pane.style.filter = ''; }
+      });
+      map.on('zoomend', function() {
+        const pane = map.getPane('tilePane');
+        if (pane && pane._brightnessFilter !== undefined) pane.style.filter = pane._brightnessFilter;
+      });
+      applyBrightness(0.85);
       document.getElementById('btn-toggle').onclick = () => { document.getElementById('sidebar').classList.toggle('collapsed'); setTimeout(() => map.invalidateSize(), 400); };
       document.getElementById('locate-input').addEventListener('keydown', e => { if (e.key === 'Enter') locateCoord(); });
       document.getElementById('user-select').addEventListener('change', () => syncMemoOpHint());
